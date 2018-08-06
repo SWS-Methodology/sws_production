@@ -4,8 +4,7 @@
 \alias{computeTotSlaughtered}
 \title{computeTotStock}
 \usage{
-computeTotSlaughtered(data, tradeElements,
-  FormulaParameters = animalFormulaParameters)
+computeTotSlaughtered(data, FormulaParameters = animalFormulaParameters)
 }
 \arguments{
 \item{data}{datataset containing the the numeber of animal stocks (trade not included)}

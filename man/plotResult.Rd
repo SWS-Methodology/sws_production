@@ -8,9 +8,12 @@ It is very Module-specific}
 plotResult(data, toPubblish, pathToSave)
 }
 \arguments{
-\item{toPubblish}{}
+\item{data}{The data.table we want to plot}
 
-\item{pathToSave}{}
+\item{toPubblish}{The set of commodities that we have to flag as "FAOSTAT" which are those that 
+have a priority in the validation process.}
+
+\item{pathToSave}{The path to the folder where the plots have to be saved.}
 }
 \description{
 This function has been created to plot PROCESSED data results
