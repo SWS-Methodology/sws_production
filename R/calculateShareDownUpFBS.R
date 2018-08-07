@@ -16,7 +16,7 @@
 ##' @export
 ##'
 
-calculateShareDownUp2FBS = function(data,tree, printNegativeAvailability=TRUE , params, printDirectory = NULL, useAllSUAcomponents=FALSE)
+calculateShareDownUpFBS = function(data,tree, printNegativeAvailability=TRUE , params, printDirectory = NULL, useAllSUAcomponents=FALSE)
   
 {
   ##Checks
