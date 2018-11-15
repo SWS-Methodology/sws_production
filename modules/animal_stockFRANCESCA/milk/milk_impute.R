@@ -36,6 +36,7 @@ suppressMessages({
     library(plyr)
     library(ggplot2)
     library(splines)
+    library(sendmailR)
 
 })
 
