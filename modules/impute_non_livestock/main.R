@@ -104,9 +104,9 @@ completeImputationKey = getCompleteImputationKey("production")
 liveStockItems =
     getAnimalMeatMapping(R_SWS_SHARE_PATH = R_SWS_SHARE_PATH,
                          onlyMeatChildren = FALSE) 
-    liveStockItems = liveStockItems[,.(measuredItemParentCPC, measuredItemChildCPC)]
-    liveStockItems = unlist(x = liveStockItems, use.names = FALSE)
-    liveStockItems = unique(x = liveStockItems )
+liveStockItems = liveStockItems[,.(measuredItemParentCPC, measuredItemChildCPC)]
+liveStockItems = unlist(x = liveStockItems, use.names = FALSE)
+liveStockItems = unique(x = liveStockItems )
 
 
 ##' This is the complete list of items that are in the imputation list
