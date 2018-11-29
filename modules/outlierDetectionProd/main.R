@@ -89,6 +89,9 @@ geoKeys = GetCodeList(domain = "agriculture", dataset = "aproduction",
      switch(ItemImputationSelection,
             "session" = sessionItems,
             "all" = itemkeys)
+ 
+ sessionElements=getQueryKey("measuredElement", sessionKey)
+ 
 
 #########################################
 ##### Pull from SUA unbalanced data #####
@@ -104,7 +107,7 @@ geoDim = Dimension(name = "geographicAreaM49", keys = selectedGEOCode)
 eleKeys <- GetCodeList(domain = "agriculture", dataset = "aproduction", "measuredElement")
 eleKeys = eleKeys[, code]
 
-eleDim <- Dimension(name = "measuredElement", keys = c("5510","5312","5421"))
+eleDim <- Dimension(name = "measuredElement", keys = sessionElements)
 
 #Define item dimension
 
@@ -141,7 +144,8 @@ data=normalise(data, areaVar = "geographicAreaM49",
 ###########################################################
 ##### calculate historical means                     #####
 ###########################################################
-data <-data %>% group_by(geographicAreaM49,measuredItemCPC,measuredElement) %>% mutate(Meanold=mean(Value[timePointYears<2017 & timePointYears>2010],na.rm=T))
+interval<-(startYear-1):(startYear-window)
+data <-data %>% group_by(geographicAreaM49,measuredItemCPC,measuredElement) %>% mutate(Meanold=mean(Value[timePointYears%in% interval & timePointYears>2010],na.rm=T))
 data$Value[is.na(data$Value)] <- 0
 
 
@@ -157,7 +161,7 @@ data <-data %>% mutate(outlier=(outlierImput==T | outlierOff==T) )
 setDT(data)
 data[,c("outlierImput","outlierOff"):=NULL]
 
-outlierList=subset(data,outlier==T & timePointYears==2017)
+outlierList=subset(data,outlier==T & timePointYears>=startYear)
 
 outlierList <-nameData("agriculture","aproduction",outlierList)
 outlierList[,timePointYears_description := NULL]
