@@ -130,12 +130,12 @@ key = DatasetKey(domain = "agriculture", dataset = "aproduction", dimensions = l
 
 
 
-data = GetData(key,omitna = F, normalized=F)
+data = GetData(key, omitna = FALSE, normalized = FALSE)
 data=normalise(data, areaVar = "geographicAreaM49",
                itemVar = "measuredItemCPC", elementVar = "measuredElement",
                yearVar = "timePointYears", flagObsVar = "flagObservationStatus",
                flagMethodVar = "flagMethod", valueVar = "Value",
-               removeNonExistingRecords = F)
+               removeNonExistingRecords = FALSE)
 
 
 
@@ -145,36 +145,43 @@ data=normalise(data, areaVar = "geographicAreaM49",
 ##### calculate historical means                     #####
 ###########################################################
 interval<-(startYear-1):(startYear-window)
-data <-data %>% group_by(geographicAreaM49,measuredItemCPC,measuredElement) %>% mutate(Meanold=mean(Value[timePointYears%in% interval & timePointYears>2010],na.rm=T))
-data$Value[is.na(data$Value)] <- 0
 
+data[,
+     Meanold := mean(Value[timePointYears%in% interval & timePointYears>2010], na.rm = TRUE),
+     by = c('geographicAreaM49', 'measuredItemCPC', 'measuredElement')
+    ]
 
-data <-data %>% mutate(ratio=Value/Meanold)
+data[is.na(data$Value), Value := 0]
 
+data[, ratio := Value / Meanold]
 
-data <-data %>% mutate(outlierImput=abs(ratio-1)>.3 & flagObservationStatus=="I")
-data <-data %>% mutate(outlierOff=abs(ratio-1)>.5 & flagObservationStatus!="I")
-#data <-data %>% mutate(outlier=(outlierImput==T | outlierOff==T | is.na(flagObservationStatus)) )
-data <-data %>% mutate(outlier=(outlierImput==T | outlierOff==T) )
+data[,
+     `:=`(
+        outlierImput = abs(ratio-1) > .3 & flagObservationStatus == "I",
+        outlierOff   = abs(ratio-1) > .5 & flagObservationStatus != "I"
+      )]
 
+data[,
+     `:=`(
+        outlier      = (outlierImput == TRUE | outlierOff == TRUE),
+        outlierImput = NULL,
+        outlierOff   = NULL
+      )]
 
-setDT(data)
-data[,c("outlierImput","outlierOff"):=NULL]
+outlierList <- data[outlier == TRUE & timePointYears >= startYear]
 
-outlierList=subset(data,outlier==T & timePointYears>=startYear)
-
-outlierList <-nameData("agriculture","aproduction",outlierList)
-outlierList[,timePointYears_description := NULL]
-
-bodyOutliers= paste("The Email contains a list of production outliers",
-                    sep='\n')
-
-sendMailAttachment(outlierList,"outlierList",bodyOutliers)
-
-
+outlierList <- nameData("agriculture", "aproduction", outlierList, except = "timePointYears")
 
 ################################################################
-#####  send Email with outlier list   #####
+###########  send Email with outlier list, if any.   ###########
 ################################################################
 
+if (nrow(outlierList) > 0) {
+  bodyOutliers <- "The Email contains a list of production outliers"
 
+  sendMailAttachment(outlierList, "outlierList", bodyOutliers)
+
+  print("An with outliers was just sent to you.")
+} else {
+  print("Great, no outliers were found.")
+}
