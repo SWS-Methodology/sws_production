@@ -181,7 +181,7 @@ if (nrow(outlierList) > 0) {
 
   sendMailAttachment(outlierList, "outlierList", bodyOutliers)
 
-  print("An with outliers was just sent to you.")
+  print("An email with outliers was just sent to you.")
 } else {
   print("Great, no outliers were found.")
 }
