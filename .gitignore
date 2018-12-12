@@ -10,3 +10,4 @@ imputation_fit/
 imputation.log
 sws.yml
 *.sh
+*.sw[a-z]
