@@ -71,12 +71,14 @@ if (!imputationTimeWindow %in% c("all", "lastThree")) {
   stop("Incorrect imputation selection specified")
 }
 
+
 ##' Build processing parameters
 processingParameters = productionProcessingParameters(datasetConfig = datasetConfig)
 
 ##' Obtain the complete imputation key
 
 completeImputationKey = getCompleteImputationKey("production")
+
 lastYear = max(as.numeric(completeImputationKey@dimensions$timePointYears@keys))
 
 ##' Here I need to take the data table directly from the SWS
@@ -145,6 +147,23 @@ if (imputationTimeWindow == "all") {
   eggsAnimalData = removeNonProtectedFlag(eggsAnimalData, keepDataUntil = (lastYear-2))
 }
 
+## Pull numbers
+eggsNumbersKey = completeImputationKey
+eggsNumbersKey@dimensions$measuredItemCPC@keys = eggsItems
+eggsNumbersKey@dimensions$measuredElement@keys = "5513" # XXX parameterise
+
+eggsNumbersData <-
+  GetData(eggsNumbersKey) %>%
+  preProcessing() %>%
+  expandYear(newYears = lastYear)
+
+if (imputationTimeWindow == "all") {
+  eggsNumbersData = removeNonProtectedFlag(eggsNumbersData)
+} else {
+  eggsNumbersData = removeNonProtectedFlag(eggsNumbersData, keepDataUntil = (lastYear-2))
+}
+
+
 ##Impute eggs animals
 
 eggsAnimalsDataToModel <-
@@ -195,6 +214,8 @@ eggsAnimalModel = lmer(log(get(eggsFormulaParameters$areaHarvestedValue)) ~ 0 +
 #
 
 # I am excluding those items where no livestock number exists.
+# XXX: note that there are (some) cases where:
+# eggsAnimalFinalDataToModel[Value_measuredElement_5313 > Value_measuredElement_5112]
 eggsAnimalsDataToModel = eggsAnimalsDataToModel[!is.na(get(livestockFormulaParameters$productionValue))]    
 
 ## ---------------------------------------------------------------------
@@ -217,6 +238,9 @@ eggsAnimalsDataToModel[
     flagMethod_measuredElement_5313 = processingParameters$imputationMethodFlag
   )
 ]
+
+# TODO: here we should do something else when:
+# eggsAnimalsDataToModel[Value_measuredElement_5313 > Value_measuredElement_5112]
 
 eggsAnimalsDataToModel[, predicted := NULL]
 
@@ -252,10 +276,56 @@ if (imputationTimeWindow == "all") {
 #eggsProductionData = removeNonProtectedFlag(eggsProductionData)
 
 eggsProductionDataToModel <-
-  rbind(eggsAnimals, eggsProductionData) %>%
+  rbind(eggsAnimals, eggsProductionData, eggsNumbersData) %>%
   preProcessing() %>%
   denormalise(denormaliseKey = "measuredElement", fillEmptyRecords = TRUE)
 
+# We are going to use now the (protected) number of eggs, if reported,
+# to calculate production based on a table with conversion factors
+
+
+# XXX: use SWS datatable
+eggs_conversion_factors <-
+  ReadDatatable('eggs_conversion_factors') %>%
+  data.table::melt(
+    id = c('year', 'm49', 'name', 'comments', 'responsible')
+  ) %>%
+  tidyr::separate(
+    variable,
+    into = c('variable', 'measuredItemCPC')
+  ) %>%
+  dplyr::filter(variable == "weight") %>%
+  dplyr::select(timePointYears = year, geographicAreaM49 = m49, measuredItemCPC, avg_weight = value) %>%
+  setDT()
+
+
+eggsProductionDataToModel <-
+  eggs_conversion_factors[
+    eggsProductionDataToModel,
+    on = c('geographicAreaM49', 'timePointYears', 'measuredItemCPC')
+  ][,
+    # {(5513 * 1000) * [avg_weight / 1000]} / 1000
+    # () = numbers, [] = kilos per number, {} = kilos
+    imputed_prod := Value_measuredElement_5513 * avg_weight / 1000 # XXX parameterise 5513?
+  ]
+
+eggsProductionToBeImputed <-
+  eggsProductionDataToModel[, get(eggsFormulaParameters$productionObservationFlag)] == processingParameters$missingValueObservationFlag &
+  eggsProductionDataToModel[, get(eggsFormulaParameters$productionMethodFlag)] == processingParameters$missingValueMethodFlag &
+  !is.na(eggsProductionDataToModel[, imputed_prod])
+
+eggsProductionDataToModel[
+  eggsProductionToBeImputed,
+  `:=`(
+    Value_measuredElement_5510 = imputed_prod,
+    flagObservationStatus_measuredElement_5510 = processingParameters$imputationObservationFlag,
+    flagMethod_measuredElement_5510 = processingParameters$imputationMethodFlag
+  )
+][,
+  imputed_prod := NULL
+]
+
+# NOTE: we use below the production imputed above also in the model
 eggsProdFinalDataToModel <-
   eggsProductionDataToModel[
     (!is.na(get(eggsFormulaParameters$areaHarvestedValue)) |
@@ -319,7 +389,7 @@ completeTriplet[
   Value_measuredElement_5424 := ( get(eggsFormulaParameters$productionValue) / get(eggsFormulaParameters$areaHarvestedValue)) * 1000
 ]
 
-eggsYieldImputedFlags = as.logical(eggsYieldToBeImputed * !is.na(completeTriplet[, get(eggsFormulaParameters$yieldValue)]))
+eggsYieldImputedFlags = eggsYieldToBeImputed & !is.na(completeTriplet[, get(eggsFormulaParameters$yieldValue)])
 
 completeTriplet[
   eggsYieldImputedFlags,
@@ -353,6 +423,11 @@ completeTriplet[
   )
 ]
 
+completeTriplet[
+  MdashEggsAnimal & flagObservationStatus_measuredElement_5513 == "M" & flagMethod_measuredElement_5513 == "u",
+  flagMethod_measuredElement_5513 := "-"
+]
+
 
 ## if production of milk numbers are (M,-)
 MdashEggsProd <-
@@ -366,11 +441,44 @@ completeTriplet[
       eggsFormulaParameters$yieldValue,
       eggsFormulaParameters$yieldObservationFlag,
       eggsFormulaParameters$yieldMethodFlag),
-    list(NA_real_,"M", "-")
+    list(NA_real_, "M", "-")
   )
 ]
 
-         
+completeTriplet[
+  MdashEggsProd & flagObservationStatus_measuredElement_5513 == "M" & flagMethod_measuredElement_5513 == "u",
+  flagMethod_measuredElement_5513 := "-",
+]
+
+
+# Estimation of missing numbers
+completeTriplet <-
+  eggs_conversion_factors[,
+    timePointYears := as.character(timePointYears)
+  ][
+    completeTriplet,
+    on = c('geographicAreaM49', 'timePointYears', 'measuredItemCPC')
+  ]
+
+numbersToBeEstimated <-
+    completeTriplet$flagObservationStatus_measuredElement_5513 == "M" &
+    completeTriplet$flagMethod_measuredElement_5513 == "u" &
+    !is.na(completeTriplet$Value_measuredElement_5510) &
+    !is.na(completeTriplet$avg_weight)
+
+completeTriplet[
+  numbersToBeEstimated,
+  `:=`(
+    Value_measuredElement_5513 = (Value_measuredElement_5510 * 1000) / avg_weight,
+    flagObservationStatus_measuredElement_5513 = "I",
+    # XXX method actually shouldn't be always "e", sometimes "i"
+    flagMethod_measuredElement_5513 = "e"
+  )
+][,
+ avg_weight := NULL
+]
+
+
 ## ---------------------------------------------------------------------
 ## Push data back into the SWS
 
@@ -378,6 +486,10 @@ completeTriplet[
 
 ## ensureProtectedData
 ## ensureProductionOutput
+
+# XXX: before normalisation, we need to handle cases where:
+# Value_measuredElement_5510 / Value_measuredElement_5313 * 1000 != Value_measuredElement_5424
+# (with some tolerance, say 1%)
 
 completeTriplet <-
   normalise(completeTriplet) %>%
