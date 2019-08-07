@@ -27,22 +27,22 @@ sendMailAttachment=function(fileToSend,name,textBody){
                                 name,
                                 sessionid)
             basedir <- tempfile()
-            dir.create(basedir)
+            dir.create(basedir, recursive = TRUE)
             destfile <- file.path(basedir, paste0(basename, FILETYPE))
             
             # create the csv in a temporary foldes   
             write.csv(fileToSend, destfile, row.names = FALSE)  
             # define on exit strategy
             on.exit(file.remove(destfile))    
-            zipfile <- paste0(destfile, ".zip")
-            withCallingHandlers(zip(zipfile, destfile, flags = "-j9X"),
-                                warning = function(w){
-                                    if(grepl("system call failed", w$message)){
-                                        stop("The system ran out of memory trying to zip up your data. Consider splitting your request into chunks")
-                                    }
-                                })
-            
-            on.exit(file.remove(zipfile), add = TRUE)
+            #zipfile <- paste0(destfile, ".zip")
+            #withCallingHandlers(zip(zipfile, destfile, flags = "-j9X"),
+            #                    warning = function(w){
+            #                        if(grepl("system call failed", w$message)){
+            #                            stop("The system ran out of memory trying to zip up your data. Consider splitting your request into chunks")
+            #                        }
+            #                    })
+            #
+            #on.exit(file.remove(zipfile), add = TRUE)
             body = textBody
             
             sendmailR::sendmail(from = "sws@fao.org",

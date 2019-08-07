@@ -309,17 +309,17 @@ eggsProductionDataToModel <-
     imputed_prod := Value_measuredElement_5513 * avg_weight / 1000 # XXX parameterise 5513?
   ]
 
-eggsProductionToBeImputed <-
+eggsProductionToBeImputed_with_avg <-
   eggsProductionDataToModel[, get(eggsFormulaParameters$productionObservationFlag)] == processingParameters$missingValueObservationFlag &
   eggsProductionDataToModel[, get(eggsFormulaParameters$productionMethodFlag)] == processingParameters$missingValueMethodFlag &
   !is.na(eggsProductionDataToModel[, imputed_prod])
 
 eggsProductionDataToModel[
-  eggsProductionToBeImputed,
+  eggsProductionToBeImputed_with_avg,
   `:=`(
     Value_measuredElement_5510 = imputed_prod,
-    flagObservationStatus_measuredElement_5510 = processingParameters$imputationObservationFlag,
-    flagMethod_measuredElement_5510 = processingParameters$imputationMethodFlag
+    flagObservationStatus_measuredElement_5510 = "T",
+    flagMethod_measuredElement_5510 = "i"
   )
 ][,
   imputed_prod := NULL
