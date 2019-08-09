@@ -61,7 +61,7 @@ R_SWS_SHARE_PATH = Sys.getenv("R_SWS_SHARE_PATH")
 if(CheckDebug()){
 
     library(faoswsModules)
-    SETTINGS = ReadSettings("sws.yml")
+    SETTINGS = ReadSettings("modules/impute_non_livestock/sws.yml")
 
     ## If you're not on the system, your settings will overwrite any others
     R_SWS_SHARE_PATH = SETTINGS[["share"]]
@@ -104,9 +104,9 @@ completeImputationKey = getCompleteImputationKey("production")
 liveStockItems =
     getAnimalMeatMapping(R_SWS_SHARE_PATH = R_SWS_SHARE_PATH,
                          onlyMeatChildren = FALSE) 
-liveStockItems = liveStockItems[,.(measuredItemParentCPC, measuredItemChildCPC)]
-liveStockItems = unlist(x = liveStockItems, use.names = FALSE)
-liveStockItems = unique(x = liveStockItems )
+    liveStockItems = liveStockItems[,.(measuredItemParentCPC, measuredItemChildCPC)]
+    liveStockItems = unlist(x = liveStockItems, use.names = FALSE)
+    liveStockItems = unique(x = liveStockItems )
 
 
 ##' This is the complete list of items that are in the imputation list
@@ -134,14 +134,10 @@ lastYear=max(as.numeric(completeImputationKey@dimensions$timePointYears@keys))
 logConsole1=file("log.txt",open = "w")
 sink(file = logConsole1, append = TRUE, type = c( "message"))
 
-
 ##' Loop through the commodities to impute the items individually.
 for(iter in seq(selectedItemCode)){
-    imputationProcess =
-       ## try
-        ({
-            
-            
+
+        imputationProcess =try({
             set.seed(070416)
             
             currentItem = selectedItemCode[iter]
@@ -214,54 +210,66 @@ for(iter in seq(selectedItemCode)){
             ## Process the data.
             processedData =
                 extractedData %>%
-                preProcessing(data = .) %>%
+                preProcessing(data = .) 
                ## expandYear(data = .,
                ##            areaVar = processingParameters$areaVar,
                ##            elementVar = processingParameters$elementVar,
                ##            itemVar = processingParameters$itemVar,
                ##            valueVar = processingParameters$valueVar,
                ##            newYears= lastYear) %>%
-                denormalise(normalisedData = .,
-                            denormaliseKey = "measuredElement",
-                            fillEmptyRecords = TRUE) %>%
-                createTriplet(data = ., formula = formulaTable)
+                
+          if(imputationTimeWindow=="all"){processedData=removeNonProtectedFlag(processedData)}else{
+              processedData=removeNonProtectedFlag(processedData, keepDataUntil = (lastYear-2))}
+            
+                
+                
+           processedData =  denormalise(normalisedData = processedData,
+                                        denormaliseKey = "measuredElement",
+                                        fillEmptyRecords = TRUE) 
+           
+           processedData = createTriplet(data = processedData, formula = formulaTable)
+            
+
             
             
-            if(imputationTimeWindow=="lastThree"){
-                
-                
-                
-                processedDataLast=processedData[get(processingParameters$yearVar) %in% c(lastYear, lastYear-1, lastYear-2)]
-                processedDataAll=processedData[!get(processingParameters$yearVar) %in% c(lastYear, lastYear-1, lastYear-2)]
-                
-                processedDataLast=processProductionDomain(data = processedDataLast,
-                                        processingParameters = processingParameters,
-                                        formulaParameters = formulaParameters) %>%
-                ensureProductionInputs(data = .,
-                                       processingParam = processingParameters,
-                                       formulaParameters = formulaParameters,
-                                       normalised = FALSE)
-                
-                processedData=rbind(processedDataLast,processedDataAll)
-                
-                
-            }else{
-                
-                
-                processedData =  processProductionDomain(data = processedData,
-                                        processingParameters = processingParameters,
-                                        formulaParameters = formulaParameters) %>%
-                    ensureProductionInputs(data = .,
-                                           processingParam = processingParameters,
-                                           formulaParameters = formulaParameters,
-                                           normalised = FALSE)
-                
-                
-                      }
-            
+   ##    if(imputationTimeWindow=="lastThree"){
+   ##        processedDataLast=processedData[get(processingParameters$yearVar) %in% c(lastYear, lastYear-1, lastYear-2)]
+   ##        processedDataAll=processedData[!get(processingParameters$yearVar) %in% c(lastYear, lastYear-1, lastYear-2)]
+   ##                        processedDataLast=processProductionDomain(data = processedDataLast,
+   ##                                processingParameters = processingParameters,
+   ##                                formulaParameters = formulaParameters) %>%
+   ##        ensureProductionInputs(data = .,
+   ##                               processingParam = processingParameters,
+   ##                               formulaParameters = formulaParameters,
+   ##                               normalised = FALSE)
+   ##        processedData=rbind(processedDataLast,processedDataAll)
+   ##        
+   ##    }else{
+   ##        
+   ##        processedData =  processProductionDomain(data = processedData,
+   ##                                processingParameters = processingParameters,
+   ##                                formulaParameters = formulaParameters) %>%
+   ##            ensureProductionInputs(data = .,
+   ##                                   processingParam = processingParameters,
+   ##                                   formulaParameters = formulaParameters,
+   ##                                   normalised = FALSE)
+   ##        
+   ##              }
+   ##    
          ##imputationParameters$productionParams$plotImputation="prompt"
 ##------------------------------------------------------------------------------------------------------------------------  
-            processedData= normalise(processedData)
+           
+            ## We have to remove (M,-) from yield: since yield is usually computed ad identity,
+            ## it results inusual that it exists a last available protected value different from NA and when we perform
+            ## the function expandYear we risk to block the whole time series. I replace all the (M,-) in yield with
+            ## (M,u) the triplet will be sychronized by the imputeProductionTriplet function.
+            
+            processedData[get(formulaParameters$yieldObservationFlag)==processingParameters$missingValueObservationFlag,
+                          ":="(c(formulaParameters$yieldMethodFlag),list(processingParameters$missingValueMethodFlag)) ]
+            
+            
+             processedData= normalise(processedData)
+        
             processedData=expandYear(data = processedData,
                        areaVar = processingParameters$areaVar,
                        elementVar = processingParameters$elementVar,
@@ -280,7 +288,7 @@ for(iter in seq(selectedItemCode)){
                     imputationParameters = imputationParameters)
 
 ##------------------------------------------------------------------------------------------------------------------------                                    
-          ## By now we do not have touched those situation in which production or areaHarvested are ZERO:
+          ## By now we did not have touched those situation in which production or areaHarvested are ZERO:
           ## we may have some yield different from zero even if productio or areaHarvested or the both are ZERO.
           ##
           ## I apply this modification to:
@@ -300,32 +308,30 @@ for(iter in seq(selectedItemCode)){
             imputed[filter, ":="(c(formulaParameters$yieldMethodFlag),list(processingParameters$balanceMethodFlag))]
 ##------------------------------------------------------------------------------------------------------------------------                       
             
-          ## Filter timePointYears for which it has been requested to compute imputations
-          ## timeWindow= c(as.numeric(swsContext.computationParams$startYear):as.numeric(swsContext.computationParams$endYear))
-          ## imputed= imputed[timePointYears %in% timeWindow,]
+    ## Filter timePointYears for which it has been requested to compute imputations
+    ## timeWindow= c(as.numeric(swsContext.computationParams$startYear):as.numeric(swsContext.computationParams$endYear))
+    ## imputed= imputed[timePointYears %in% timeWindow,]
            
-            ## Save the imputation back to the database.
+    ## Save the imputation back to the database.
          
-                ## NOTE (Michael): Records containing invalid dates are
-                ##                 excluded, for example, South Sudan only came
-                ##                 into existence in 2011. Thus although we can
-                ##                 impute it, they should not be saved back to
-                ##                 the database.
+    ##  Records containing invalid dates are
+    ##  excluded, for example, South Sudan only came
+    ##  into existence in 2011. Thus although we can
+    ##  impute it, they should not be saved back to
+    ##  the database.
                 imputed= removeInvalidDates(data = imputed, context = sessionKey)%>%
                          ensureProductionOutputs(data = ., processingParameters = processingParameters,
                                                  formulaParameters = formulaParameters,
                                                  normalised = FALSE)%>%
                          normalise(.) 
                 
-            ## By now we do not have touched those situa    
+                #ensureProductionBalanced(imputed)
+                #ensureProtectedData(imputed)
                 
-                
-                
-                
-                ## NOTE (Michael): Only data with method flag "i" for balanced,
-                ##                 or flag combination (I, e) for imputed are
-                ##                 saved back to the database.
-                ## Also the new (M,-) data have to be sent back, series must be blocked!!!
+    ## Only data with method flag "i" for balanced,
+    ## or flag combination (I, e) for imputed are   
+    ## saved back to the database.
+    ##Also the new (M,-) data have to be sent back, series must be blocked!!!
 
                
                              
@@ -394,8 +400,24 @@ if(nrow(imputationResult) > 0){
     sendmail(from = from, to = to, subject = subject, msg = bodyWithAttachment)
     stop("Production imputation incomplete, check following email to see where ",
          " it failed")
-} else {
+} 
+
+
     msg = "Imputation Completed Successfully"
     message(msg)
     msg
-}
+    
+      
+    if(!CheckDebug()){
+    ## Initiate email
+    from = "sws@fao.org"
+    to = swsContext.userEmail
+    subject = "Crop-production imputation plugin has correctly run"
+    body = paste0("The plug-in has saved the Production imputation in your session. Session number: ",  sessionKey@sessionId)
+    
+    sendmail(from = from, to = to, subject = subject, msg = body)
+    } 
+       
+        
+    print(msg) 
+
