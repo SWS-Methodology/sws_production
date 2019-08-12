@@ -77,9 +77,17 @@ if(!imputationTimeWindow %in% c("all", "lastThree"))
 processingParameters =
     productionProcessingParameters(datasetConfig = datasetConfig)
 
+
+lastYear=max(as.numeric(swsContext.computationParams$last_year))
+
+
 ##' Obtain the complete imputation key
 completeImputationKey = getCompleteImputationKey("production")
-lastYear=max(as.numeric(completeImputationKey@dimensions$timePointYears@keys))
+
+completeImputationKey@dimensions$timePointYears@keys <-
+    as.character(min(completeImputationKey@dimensions$timePointYears@keys):lastYear)
+
+# lastYear=max(as.numeric(completeImputationKey@dimensions$timePointYears@keys))
 
 animalMilkCorrespondence=ReadDatatable("animal_milk_correspondence")
 

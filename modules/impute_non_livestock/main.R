@@ -93,8 +93,15 @@ datasetConfig = GetDatasetConfig(domainCode = sessionKey@domain,
 processingParameters =
     productionProcessingParameters(datasetConfig = datasetConfig)
 
+
+lastYear=max(as.numeric(swsContext.computationParams$last_year))
+
+
 ##' Get the full imputation Datakey
 completeImputationKey = getCompleteImputationKey("production")
+
+completeImputationKey@dimensions$timePointYears@keys <-
+    as.character(min(completeImputationKey@dimensions$timePointYears@keys):lastYear)
 
 
 ##' **NOTE (Michael): Since the animal/meat are currently imputed by the
@@ -129,10 +136,10 @@ selectedItemCode =
 ##' ## Perform Imputation
 imputationResult = data.table()
 
-lastYear=max(as.numeric(completeImputationKey@dimensions$timePointYears@keys))
+# lastYear=max(as.numeric(completeImputationKey@dimensions$timePointYears@keys))
 
-logConsole1=file("log.txt",open = "w")
-sink(file = logConsole1, append = TRUE, type = c( "message"))
+# logConsole1=file("log.txt",open = "w")
+# sink(file = logConsole1, append = TRUE, type = c( "message"))
 
 ##' Loop through the commodities to impute the items individually.
 for(iter in seq(selectedItemCode)){
