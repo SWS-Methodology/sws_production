@@ -100,6 +100,11 @@ lastYear=max(as.numeric(swsContext.computationParams$last_year))
 ##' Get the full imputation Datakey
 completeImputationKey = getCompleteImputationKey("production")
 
+# Exclude 835, which is in QA but not in LIVE
+
+completeImputationKey@dimensions$geographicAreaM49@keys <-
+  setdiff(completeImputationKey@dimensions$geographicAreaM49@keys, "835")
+
 completeImputationKey@dimensions$timePointYears@keys <-
     as.character(min(completeImputationKey@dimensions$timePointYears@keys):lastYear)
 
