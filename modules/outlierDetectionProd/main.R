@@ -49,7 +49,8 @@ if(CheckDebug()){
 }
 
 
-THRESHOLD_NONIMPUTED <- 0.3
+THRESHOLD_NONIMPUTED <- 0.5
+THRESHOLD_YIELD <- 0.3
 THRESHOLD_IMPUTED <- 0.3
 
 message("PRODOUT: parameters")
@@ -152,13 +153,86 @@ key <-
   )
 
 
-data <- GetData(key, omitna = FALSE, normalized = FALSE)
+data <- GetData(key, omitna = FALSE)
 
-data <- normalise(data, areaVar = "geographicAreaM49",
-               itemVar = "measuredItemCPC", elementVar = "measuredElement",
-               yearVar = "timePointYears", flagObsVar = "flagObservationStatus",
-               flagMethodVar = "flagMethod", valueVar = "Value",
-               removeNonExistingRecords = FALSE)
+data_flags <- data[, .(geographicAreaM49, measuredElement,  measuredItemCPC, timePointYears, flagObservationStatus, flagMethod)]
+
+data <- merge(data, flagValidTable, by = c("flagObservationStatus", "flagMethod"), all.x = TRUE)
+
+data[, c("flagObservationStatus", "flagMethod", "Valid") := NULL]
+
+d <- dcast.data.table(data, geographicAreaM49 + measuredItemCPC + timePointYears ~ measuredElement, value.var = list('Value', 'Protected'))
+
+d[, computed := NA_character_]
+
+# Both production and yield are protected
+d[
+  Protected_5510 == TRUE & Protected_5312 == TRUE & Value_5312 > 0,
+  `:=`(
+    Value_5421 = Value_5510 / Value_5312,
+    computed = "yield"
+  )
+]
+
+# Only production is protected
+d[
+  Protected_5510 == TRUE & Protected_5312 == FALSE & Value_5421 > 0,
+  `:=`(
+    Value_5312 = Value_5510 / Value_5421,
+    computed = "area"
+  )
+]
+
+
+# Only area is protected
+d[
+  Protected_5510 == FALSE & Protected_5312 == TRUE & Value_5421 > 0,
+  `:=`(
+    Value_5510 = Value_5421 * Value_5312,
+    computed = "production"
+  )
+]
+
+
+
+d_flags <- merge(data_flags, d[!is.na(computed), .(geographicAreaM49, measuredItemCPC, timePointYears, computed)], by = c("geographicAreaM49", "measuredItemCPC", "timePointYears"), all.x = TRUE)
+
+
+d_flags <- d_flags[!is.na(flagObservationStatus)]
+
+d_flags[computed == "yield", computed := "5421"]
+d_flags[computed == "production", computed := "5510"]
+d_flags[computed == "area", computed := "5312"]
+
+d_flags[measuredElement == computed, flagMethod := "i"]
+
+
+d_flags[,
+  flag1 :=
+    ifelse(
+      any(!is.na(computed)),
+      faoswsFlag::aggregateObservationFlag(flagObservationStatus[measuredElement != computed]),
+      NA_character_
+    ),
+  .(geographicAreaM49, measuredItemCPC, timePointYears)
+]
+
+d_flags[measuredElement == computed, flagObservationStatus := flag1]
+
+d_modified <- d_flags[measuredElement == computed]
+
+d_flags[, flag1 := NULL]
+d_flags[, computed := NULL]
+
+
+#data <- GetData(key, omitna = FALSE, normalized = FALSE)
+#
+#data <- normalise(data, areaVar = "geographicAreaM49",
+#               itemVar = "measuredItemCPC", elementVar = "measuredElement",
+#               yearVar = "timePointYears", flagObsVar = "flagObservationStatus",
+#               flagMethodVar = "flagMethod", valueVar = "Value",
+#               removeNonExistingRecords = FALSE)
+
 
 
 ###########################################################
