@@ -48,64 +48,83 @@ if(CheckDebug()){
   )
 }
 
-startYear = as.numeric(swsContext.computationParams$startYear)
-#startYear = as.numeric(2013)
 
-endYear = as.numeric(swsContext.computationParams$endYear)
-window = as.numeric(swsContext.computationParams$window)
+THRESHOLD_NONIMPUTED <- 0.3
+THRESHOLD_IMPUTED <- 0.3
 
-#endYear = as.numeric(2017)
+message("PRODOUT: parameters")
 
-geoM49 = swsContext.computationParams$country_selection
+# The first year is the first VALIDATION year, e.g., 2016
+startYear <- as.numeric(swsContext.computationParams$startYear)
+
+# The last year is the last VALIDATION year, e.g., 2018
+endYear <- as.numeric(swsContext.computationParams$endYear)
+
+## Number of years we will use in average of `window` years (e.g., 3)
+#window <- as.numeric(swsContext.computationParams$window)
+window <- 3
+
+only_protected <- as.logical(swsContext.computationParams$only_protected)
+
+# Years used in the average
+interval <- (startYear-window):(startYear-1)
+
+geoM49 <- swsContext.computationParams$country_selection
+
 stopifnot(startYear <= endYear)
-yearVals = (startYear-window):endYear
+
+# All years required (validation years plus `window` validated years)
+yearVals <- (startYear-window):endYear
 
 ##' Get data configuration and session
-sessionKey = swsContext.datasets[[1]]
+sessionKey <- swsContext.datasets[[1]]
 
-sessionCountries =
+sessionCountries <-
   getQueryKey("geographicAreaM49", sessionKey)
 
-geoKeys = GetCodeList(domain = "agriculture", dataset = "aproduction",
+geoKeys <- GetCodeList(domain = "agriculture", dataset = "aproduction",
                       dimension = "geographicAreaM49")[type == "country", code]
 
 
 
 
 ##Select the countries based on the user input parameter
- selectedGEOCode =
-   switch(geoM49,
-          "session" = sessionCountries,
-          "all" = selectedCountries)
+selectedGEOCode <-
+  switch(geoM49,
+         "session" = sessionCountries,
+         "all" = geoKeys)
 
 
+
+itemKeys <- GetCodeList(domain = "agriculture", dataset = "aproduction", "measuredItemCPC")
+itemKeys <- itemKeys[, code]
  
- itemKeys = GetCodeList(domain = "agriculture", dataset = "aproduction", "measuredItemCPC")
- itemKeys = itemKeys[, code]
-  
- ItemImputationSelection = swsContext.computationParams$items
- sessionItems=getQueryKey("measuredItemCPC", sessionKey)
- sessionItems =
-     switch(ItemImputationSelection,
-            "session" = sessionItems,
-            "all" = itemkeys)
- 
- sessionElements=getQueryKey("measuredElement", sessionKey)
+ItemImputationSelection <- swsContext.computationParams$items
+
+sessionItems <- getQueryKey("measuredItemCPC", sessionKey)
+
+sessionItems <-
+    switch(ItemImputationSelection,
+           "session" = sessionItems,
+           "all" = itemkeys)
+
+sessionElements <- getQueryKey("measuredElement", sessionKey)
  
 
 #########################################
 ##### Pull from SUA unbalanced data #####
 #########################################
 
-message("Pulling aprod Data")
+message("PRODOUT: pulling aprod data")
 
 #take geo keys
-geoDim = Dimension(name = "geographicAreaM49", keys = selectedGEOCode)
+geoDim <- Dimension(name = "geographicAreaM49", keys = selectedGEOCode)
 
 #Define element dimension. These elements are needed to calculate net supply (production + net trade)
 
 eleKeys <- GetCodeList(domain = "agriculture", dataset = "aproduction", "measuredElement")
-eleKeys = eleKeys[, code]
+
+eleKeys <- eleKeys[, code]
 
 eleDim <- Dimension(name = "measuredElement", keys = sessionElements)
 
@@ -120,53 +139,59 @@ itemDim <- Dimension(name = "measuredItemCPC", keys = sessionItems)
 timeDim <- Dimension(name = "timePointYears", keys = as.character(yearVals))
 
 #Define the key to pull SUA data
-key = DatasetKey(domain = "agriculture", dataset = "aproduction", dimensions = list(
-  geographicAreaM49 = geoDim,
-  measuredElement = eleDim,
-  measuredItemCPC = itemDim,
-  timePointYears = timeDim
-))
+key <-
+  DatasetKey(
+    domain = "agriculture",
+    dataset = "aproduction",
+    dimensions = list(
+      geographicAreaM49 = geoDim,
+      measuredElement   = eleDim,
+      measuredItemCPC   = itemDim,
+      timePointYears    = timeDim
+    )
+  )
 
 
+data <- GetData(key, omitna = FALSE, normalized = FALSE)
 
-
-data = GetData(key, omitna = FALSE, normalized = FALSE)
-data=normalise(data, areaVar = "geographicAreaM49",
+data <- normalise(data, areaVar = "geographicAreaM49",
                itemVar = "measuredItemCPC", elementVar = "measuredElement",
                yearVar = "timePointYears", flagObsVar = "flagObservationStatus",
                flagMethodVar = "flagMethod", valueVar = "Value",
                removeNonExistingRecords = FALSE)
 
 
-
-
-
 ###########################################################
 ##### calculate historical means                     #####
 ###########################################################
-interval<-(startYear-1):(startYear-window)
+
+message("PRODOUT: historical means")
 
 data[,
-     Meanold := mean(Value[timePointYears%in% interval & timePointYears>2010], na.rm = TRUE),
-     by = c('geographicAreaM49', 'measuredItemCPC', 'measuredElement')
-    ]
+  Meanold := mean(Value[timePointYears %in% interval], na.rm = TRUE),
+  by = c('geographicAreaM49', 'measuredItemCPC', 'measuredElement')
+]
 
 data[is.na(data$Value), Value := 0]
 
 data[, ratio := Value / Meanold]
 
 data[,
-     `:=`(
-        outlierImput = abs(ratio-1) > .3 & flagObservationStatus == "I",
-        outlierOff   = abs(ratio-1) > .5 & flagObservationStatus != "I"
-      )]
+  `:=`(
+     outlierImput = abs(ratio-1) > THRESHOLD_IMPUTED & flagObservationStatus == "I",
+     outlierOff   = abs(ratio-1) > THRESHOLD_NONIMPUTED & flagObservationStatus != "I"
+   )
+]
 
-data[,
-     `:=`(
-        outlier      = (outlierImput == TRUE | outlierOff == TRUE),
-        outlierImput = NULL,
-        outlierOff   = NULL
-      )]
+if (only_protected == TRUE) {
+  what_out <- "NON-IMPUTED"
+  data[, outlier := outlierOff]
+} else {
+  what_out <- "IMPUTED AND NON-IMPUTED"
+  data[, outlier := (outlierImput == TRUE | outlierOff == TRUE)]
+}
+
+data[, c("outlierImput", "outlierOff") := NULL]
 
 outlierList <- data[outlier == TRUE & timePointYears >= startYear]
 
@@ -177,7 +202,8 @@ outlierList <- nameData("agriculture", "aproduction", outlierList, except = "tim
 ################################################################
 
 if (nrow(outlierList) > 0) {
-  bodyOutliers <- "The Email contains a list of production outliers"
+  bodyOutliers <-
+    paste("The Email contains a list of", what_out, "production outliers")
 
   sendMailAttachment(outlierList, "outlierList", bodyOutliers)
 
@@ -185,3 +211,4 @@ if (nrow(outlierList) > 0) {
 } else {
   print("Great, no outliers were found.")
 }
+
