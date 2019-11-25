@@ -21,3 +21,4 @@ flagValidTable <- ReadDatatable("valid_flags")
 data <- readRDS(paste0("//hqlprsws1.hq.un.fao.org/sws_r_share/mongeau/tmp/production_outliers/data/production/", COUNTRY, ".rds"))
 
 
+#Test amsata
