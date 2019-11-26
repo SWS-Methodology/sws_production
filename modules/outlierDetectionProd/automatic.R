@@ -1,3 +1,5 @@
+
+# Import libraries
 library(data.table)
 library(faosws)
 library(faoswsProduction)
@@ -32,7 +34,7 @@ if (CheckDebug()) {
   )
 }
 
-#functions
+#### FUNCTIONS #####
 
 # rollavg() is a rolling average function that uses computed averages
 # to generate new values if there are missing values (and FOCB/LOCF).
@@ -130,7 +132,11 @@ interval <- (startYear-window):(startYear-1)
 yearVals <- (startYear-window):endYear
 
 
+
+# Read the data needed
+
 flagValidTable <- ReadDatatable("valid_flags")
+triplets <- ReadDatatable("item_type_yield_elements")
 
 data <- readRDS(paste0("//hqlprsws1.hq.un.fao.org/sws_r_share/mongeau/tmp/production_outliers/data/production/", COUNTRY, ".rds"))
 
@@ -139,8 +145,10 @@ data<-merge(
     flagValidTable,
     by=c("flagObservationStatus","flagMethod")
 )
-#triplet
-triplets <- ReadDatatable("item_type_yield_elements")
+
+
+# Define the triplets: INPUT, OUTPUT and PRODUCTIVITY
+# TO DO: write a function for triplet selection
 
 crop_triplet<-as.vector(triplets[item_type=="CRPR"])
 
@@ -150,12 +158,16 @@ crop_triplet_lst<-list(input="5312",output="5510",productivity="5421")
 
 data_crop<-data[measuredElement %in% crop_triplet_vec]
 
-#first step
-productivity_vars<-c("5421")
-#correction of yield outliers
-data_crop<-imput_with_average(data=data_crop,"5421")
 
-data_crop<- dcast.data.table(data_crop, geographicAreaM49 + measuredItemCPC + timePointYears ~ measuredElement, value.var = list('Value', 'Protected'))
+
+#### First step: automatic outlier check and correct for PRODUCTIVITY ####
+# Select the productivity of your triplet
+productivity_vars <- c("5421")
+
+# Find and correct of outliers of productivity
+data_crop <- imput_with_average(data=data_crop,"5421")
+
+data_crop <- dcast.data.table(data_crop, geographicAreaM49 + measuredItemCPC + timePointYears ~ measuredElement, value.var = list('Value', 'Protected'))
 
 
 
@@ -204,51 +216,151 @@ compute_movav<-function(data=data_crop,element="5510",type="output") {
 }
 
 
-Label_outlier(data=data_crop,element="5510",type="output")
-compute_movav(data=data_crop,element="5510",type="output")
-Label_outlier(data=data_crop,element="5312",type="input")
-compute_movav(data=data_crop,element="5312",type="input")
+
+
 
 
 #Correcting outliers
 #Parametrize input var, output var and productivity var
 
 correctInputOutput<-function(data=data_crop,
-                             input="5312",
-                             output="5510",
-                             productivity="5421"
+                             triplet=crop_triplet_lst
                              ) {
     
+    
+    Label_outlier(data=data,element=triplet$output,type="output")
+    compute_movav(data=data,element=triplet$output,type="output")
+    
+    Label_outlier(data=data,element=triplet$input,type="input")
+    compute_movav(data=data,element=triplet$input,type="input")
+    
+    input = crop_triplet_lst$input
+    output =crop_triplet_lst$output
+    productivity = crop_triplet_lst$productivity
     
     input<-paste0("Value_",input)
     output<-paste0("Value_",output)
     productivity<-paste0("Value_",productivity)
 
+    data[isOutlier_input==TRUE & isOutlier_output==TRUE,c(output):=movav_output]
+    data[isOutlier_input==TRUE & isOutlier_output==TRUE,c(input):=movav_output/get(productivity)]
     
-    
-    
-    data[isOutlier_input==TRUE & isOutlier_output==TRUE,c(input):=movav_input]
-    data[isOutlier_input==TRUE & isOutlier_output==TRUE,c(output):=movav_input*get(productivity)]
     data[isOutlier_input==TRUE & isOutlier_output==TRUE,
          `:=`(isOutlier_input=FALSE,isOutlier_output=FALSE)]
     
-    data[isOutlier_input==TRUE & isOutlier_output==FALSE,c(input):=get(output)/get(productivity)]
+    data[isOutlier_input==TRUE & isOutlier_output==FALSE,c(input):=ifelse(get(productivity)!=0,get(output)/get(productivity),NA)]
     data[isOutlier_input==TRUE & isOutlier_output==FALSE,isOutlier_input:=FALSE]
     
     data[isOutlier_input==FALSE & isOutlier_output==TRUE,
-         c(output):=get(input)/get(productivity)]
+         c(output):=get(input)*get(productivity)]
     
     data[isOutlier_input==FALSE & isOutlier_output==TRUE,isOutlier_output:=TRUE]
+    
+    #update the productivity
+    data[,c(productivity):=ifelse(get(input)!=0,get(output)/get(input),NA)]
     
     return(data)
     
 }
 
-correctInputOutput(data_crop,
-                   input = crop_triplet_lst$input,
-                   output =crop_triplet_lst$output,
-                   productivity = crop_triplet_lst$productivity
-                   )
 
 
+# correctInputOutput(data_crop,
+#                    input = crop_triplet_lst$input,
+#                    output =crop_triplet_lst$output,
+#                    productivity = crop_triplet_lst$productivity
+#                    )
+
+
+finalCrop<-correctInputOutput(data_crop,triplet = crop_triplet_lst)
+
+id.vars=c("geographicAreaM49","timePointYears","measuredItemCPC")
+finalCrop<-finalCrop[,c(id.vars,grep("^Value",names(finalCrop),value = TRUE)),with=FALSE]
+
+finalCrop<-melt(finalCrop, id.vars=c("geographicAreaM49","timePointYears",
+                                     "measuredItemCPC"), grep("^Value",names(finalCrop),value = TRUE),
+                variable.name = "measuredElement", value.name = "value_new")
+
+finalCrop[,measuredElement:=substr(measuredElement,start = 7,stop = 10)]
+finalCrop[value_new==Inf,value_new:=NA_real_]
+
+
+
+data<-merge(
+    data,
+    finalCrop,
+    by=c("geographicAreaM49","timePointYears","measuredElement", "measuredItemCPC"),
+    all.x = TRUE
+)
+
+data[,difference:=value_new-Value]
+View(data)
+
+
+dataplot<-data[measuredElement=="5312" & measuredItemCPC=="01379.90" & timePointYears>2000]
+
+
+library(ggplot2)
+
+ggplot(dataplot)+
+    geom_line(aes(as.numeric(timePointYears),Value),
+              size=1, color="green")+
+    geom_line(aes(as.numeric(timePointYears),value_new),
+              size=1, color="red")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Function to imput with the other elements
+# imput_with_elements <-function(data, type){
+#   
+#   #TO DO: quality check
+#   if (type == 'input'){
+#     data[Value_5421 > 0,
+#       `:=`(
+#         Value_5312 = round((Value_5510 / Value_5421), digits=6)
+#       )
+#       ]
+#     
+#   } else if(type == 'output'){
+#     data[Value_5421 > 0,
+#       `:=`(
+#         Value_5510 = round((Value_5421 * Value_5312), digits=6)
+#       )
+#       ]
+#   }
+# 
+# }
+# 
+# 
+# # Correcting outliers of Input and Output
+# 
+# correct_input_output <- function(data){
+#   # TO DO: Quality check
+#   if(data[,isOutlier_input == TRUE & isOutlier_output == FALSE]){
+#     data <- imput_with_elements(data, type = 'input')
+#     
+#   } else if (data[,isOutlier_input == TRUE & isOutlier_output == TRUE]){
+#     data <- imput_with_average(data, '5510')
+#     data <- imput_with_elements(data,type = 'input')
+#     
+#   } else if (data[,isOutlier_input == FALSE & isOutlier_output == TRUE]){
+#     data <- imput_with_elements(data, type = 'outlier')
+#     
+#   } else{}
+#   
+# }
 
