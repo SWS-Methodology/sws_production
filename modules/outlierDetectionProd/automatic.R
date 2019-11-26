@@ -189,5 +189,3 @@ Label_outlier(data=data_crop,element="5421",type="input")
 
 #Correcting outliers
 
-
-
