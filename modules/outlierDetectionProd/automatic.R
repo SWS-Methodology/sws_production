@@ -144,8 +144,9 @@ triplets <- ReadDatatable("item_type_yield_elements")
 
 crop_triplet<-as.vector(triplets[item_type=="CRPR"])
 
-crop_triplet_lst<-list(input="5312",productivity="5421",output="5510")
-crop_triplet_vec<-list("5312","5421","5510")
+crop_triplet_lst<-list(input="5312",output="5510",productivity="5421")
+
+# crop_triplet_vec<-c("5312","5421","5510")
 
 data_crop<-data[measuredElement %in% crop_triplet_vec]
 
@@ -184,8 +185,70 @@ Label_outlier<-function(data=data_crop,element="5510",type="output"){
     return(data)
 }
 
+compute_movav<-function(data=data_crop,element="5510",type="output") {
+    Value<-paste0("Value_",element)
+    movag<-paste0("movav_",type)
+    
+    data[,value_new:=get(Value)]
+    data[timePointYears>2013,value_new:=NA]
+   
+    data <-
+        data[
+            order(geographicAreaM49,measuredItemCPC, timePointYears),
+            c(movag) := rollavg(value_new, order = 3),
+            by = c("geographicAreaM49","measuredItemCPC")
+            ]
+    
+    data[,value_new:=NULL]
+    return(data)
+}
+
+
 Label_outlier(data=data_crop,element="5510",type="output")
-Label_outlier(data=data_crop,element="5421",type="input")
+compute_movav(data=data_crop,element="5510",type="output")
+Label_outlier(data=data_crop,element="5312",type="input")
+compute_movav(data=data_crop,element="5312",type="input")
+
 
 #Correcting outliers
+#Parametrize input var, output var and productivity var
+
+correctInputOutput<-function(data=data_crop,
+                             input="5312",
+                             output="5510",
+                             productivity="5421"
+                             ) {
+    
+    
+    input<-paste0("Value_",input)
+    output<-paste0("Value_",output)
+    productivity<-paste0("Value_",productivity)
+
+    
+    
+    
+    data[isOutlier_input==TRUE & isOutlier_output==TRUE,c(input):=movav_input]
+    data[isOutlier_input==TRUE & isOutlier_output==TRUE,c(output):=movav_input*get(productivity)]
+    data[isOutlier_input==TRUE & isOutlier_output==TRUE,
+         `:=`(isOutlier_input=FALSE,isOutlier_output=FALSE)]
+    
+    data[isOutlier_input==TRUE & isOutlier_output==FALSE,c(input):=get(output)/get(productivity)]
+    data[isOutlier_input==TRUE & isOutlier_output==FALSE,isOutlier_input:=FALSE]
+    
+    data[isOutlier_input==FALSE & isOutlier_output==TRUE,
+         c(output):=get(input)/get(productivity)]
+    
+    data[isOutlier_input==FALSE & isOutlier_output==TRUE,isOutlier_output:=TRUE]
+    
+    return(data)
+    
+}
+
+correctInputOutput(data_crop,
+                   input = crop_triplet_lst$input,
+                   output =crop_triplet_lst$output,
+                   productivity = crop_triplet_lst$productivity
+                   )
+
+
 
