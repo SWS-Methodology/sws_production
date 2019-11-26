@@ -3,7 +3,23 @@ library(faosws)
 library(faoswsProduction)
 library(faoswsFlag)
 
-CERTIFICATES_DIR <- "C:/Users/NIANGAM\\Documents\\certificates\\certificates\\production"
+
+USER<-"amsa"
+
+if(USER=="amsa"){
+    
+    CERTIFICATES_DIR <- "C:/Users/NIANGAM\\Documents\\certificates\\certificates\\production"
+} 
+
+if(USER=="aydan"){
+CERTIFICATES_DIR <- "C:/Users/Selek/Documents/certificates/production"
+}
+
+if(USER=="christian") {
+    CERTIFICATES_DIR <- "C:/Users/mongeau.FAODOMAIN/Documents/certificates/production"
+} 
+
+
 COUNTRY <- 840
 
 
@@ -56,12 +72,59 @@ rollavg <- function(x, order = 3) {
 }
 
 
+imput_with_average<-function(data,element){
+    
+    #TO DO: quality check
+    
+    data_element<-data[measuredElement %in% element]
+    
+    data_element[,
+                 Meanold := mean(Value[timePointYears %in% interval], na.rm = TRUE),
+                 by = c('geographicAreaM49', 'measuredItemCPC', 'measuredElement')
+                 ]
+    
+    data_element[is.na(data$Value), Value := 0]
+    
+    data_element[, ratio := Value / Meanold]
+    
+    data_element[,is_outlier:=ifelse(abs(ratio-1) > THRESHOLD_IMPUTED & Protected==FALSE,TRUE,FALSE)]
+    
+    data_element[,value_new:=Value]
+    data_element[timePointYears>2013,value_new:=NA]
+    
+    data_element <-
+        data_element[
+            order(geographicAreaM49, measuredElement, measuredItemCPC, timePointYears),
+            value_avg := rollavg(value_new, order = 3),
+            by = c("geographicAreaM49", "measuredElement", "measuredItemCPC")
+            ]
+    
+    data_element[is_outlier==TRUE,`:=`(Value=value_avg,
+                                       flagObservationStatus="I",
+                                       flagMethod="e")]
+    
+    data_element<-data_element[,colnames(data),with=FALSE]
+    
+    data<-rbind(
+        data_element,
+        data[!data_element,on=c("measuredElement")]
+    )
+    
+    return(data)
+    
+}
+
+
+
+
+
+
 
 
 startYear<-2014
 endYear<-2018
 # interval<-2008:2013
-THRESHOLD_IMPUTED<-0.3
+THRESHOLD_IMPUTED<-0.1
 window <- 3
 interval <- (startYear-window):(startYear-1)
 yearVals <- (startYear-window):endYear
@@ -87,33 +150,44 @@ crop_triplet_vec<-list("5312","5421","5510")
 data_crop<-data[measuredElement %in% crop_triplet_vec]
 
 #first step
-productivity_data<-data_crop[measuredElement=="5421"]
+productivity_vars<-c("5421")
+#correction of yield outliers
+data_crop<-imput_with_average(data=data_crop,"5421")
 
-productivity_data[,
-     Meanold := mean(Value[timePointYears %in% interval], na.rm = TRUE),
-     by = c('geographicAreaM49', 'measuredItemCPC', 'measuredElement')
-     ]
+data_crop<- dcast.data.table(data_crop, geographicAreaM49 + measuredItemCPC + timePointYears ~ measuredElement, value.var = list('Value', 'Protected'))
 
-productivity_data[is.na(data$Value), Value := 0]
 
-productivity_data[, ratio := Value / Meanold]
 
-productivity_data[,is_outlier:=ifelse(abs(ratio-1) > THRESHOLD_IMPUTED & Protected==FALSE,TRUE,FALSE)]
+Label_outlier<-function(data=data_crop,element="5510",type="output"){
+    Value<-paste0("Value_",element)
+    Protected<-paste0("Protected_",element)
+    outlier<-paste0("isOutlier_",type)
+    
+    
+    #TO DO: quality check
+    
+    # data_element<-data[measuredElement %in% element]
+    
+    data[,
+                 Meanold := mean(get(Value)[timePointYears %in% interval], na.rm = TRUE),
+                 by = c('geographicAreaM49', 'measuredItemCPC')
+                 ]
+    
+    data[is.na(get(Value)), c(Value) := 0]
+    
+    data[, ratio := get(Value) / Meanold]
+    
+    data[,c(outlier):=ifelse(abs(ratio-1) > THRESHOLD_IMPUTED & get(Protected)==FALSE,TRUE,FALSE)]
+    
+    data[,`:=`(Meanold=NULL,ratio=NULL)]
+    
+    return(data)
+}
 
-productivity_data[,value_new:=Value]
-productivity_data[timePointYears>2013,value_new:=NA]
+Label_outlier(data=data_crop,element="5510",type="output")
+Label_outlier(data=data_crop,element="5421",type="input")
 
-productivity_data <-
-    productivity_data[
-        order(geographicAreaM49, measuredElement, measuredItemCPC, timePointYears),
-        value_avg := rollavg(value_new, order = 3),
-        by = c("geographicAreaM49", "measuredElement", "measuredItemCPC")
-        ]
-
-productivity_data[is_outlier==TRUE,Value:=value_avg]
-
-productivity_data[,`:=`(value_avg=NULL,value_new=NULL,is_outlier=NULL)]
-
+#Correcting outliers
 
 
 
