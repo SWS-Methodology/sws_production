@@ -142,7 +142,7 @@ if(!imputationSelection %in% c("session", "all"))
 
 
 imputationTimeWindow = swsContext.computationParams$imputation_timeWindow
-if(!imputationTimeWindow %in% c("all", "lastThree"))
+if(!imputationTimeWindow %in% c("all", "lastThree", "lastFive"))
     stop("Incorrect imputation selection specified")
 
 ##' Get data configuration and session
@@ -321,8 +321,13 @@ for(iter in seq(selectedMeatCode)){
         ## for last three years in case you have chosed to produce imputations only for last
         ## three years
         
-        if(imputationTimeWindow=="all"){animalData=removeNonProtectedFlag(animalData)}else{
-            animalData=removeNonProtectedFlag(animalData, keepDataUntil = (lastYear-2))}
+        if (imputationTimeWindow == "all") {
+          animalData = removeNonProtectedFlag(animalData)
+        } else if (imputationTimeWindow == "lastThree") {
+          animalData = removeNonProtectedFlag(animalData, keepDataUntil = (lastYear - 2))
+        } else if (imputationTimeWindow == "lastFive") {
+          animalData = removeNonProtectedFlag(animalData, keepDataUntil = (lastYear - 4))
+        }
         
         animalData= expandYear(data = animalData,
                                areaVar = processingParameters$areaVar,
@@ -407,8 +412,13 @@ for(iter in seq(selectedMeatCode)){
             GetData(key = .) %>%
             preProcessing(data = .) 
         
-        if(imputationTimeWindow=="all"){slaughteredAnimalData=removeNonProtectedFlag(slaughteredAnimalData)}else{
-            slaughteredAnimalData=removeNonProtectedFlag(slaughteredAnimalData, keepDataUntil = (lastYear-2))}
+        if (imputationTimeWindow == "all") {
+          slaughteredAnimalData = removeNonProtectedFlag(slaughteredAnimalData)
+        } else if (imputationTimeWindow == "lastThree") {
+          slaughteredAnimalData = removeNonProtectedFlag(slaughteredAnimalData, keepDataUntil = (lastYear - 2))
+        } else if (imputationTimeWindow == "lastFive") {
+          slaughteredAnimalData = removeNonProtectedFlag(slaughteredAnimalData, keepDataUntil = (lastYear - 4))
+        }
         
         slaughteredAnimalData= removeNonProtectedFlag(slaughteredAnimalData) %>%
             expandYear(data = .,
@@ -416,7 +426,7 @@ for(iter in seq(selectedMeatCode)){
                        elementVar = processingParameters$elementVar,
                        itemVar = processingParameters$itemVar,
                        valueVar = processingParameters$valueVar,
-                       newYears=lastYear) 
+                       newYears = lastYear) 
         
         slaughteredAnimalData=denormalise(slaughteredAnimalData, denormaliseKey = "measuredElement", fillEmptyRecords=TRUE)
         ## Prepare the table to be used to compute TOT slaughtered Animal: this approach has been follow in order to
@@ -521,8 +531,14 @@ for(iter in seq(selectedMeatCode)){
         meatData = GetData(key = meatKey)
         meatData = preProcessing(data = meatData) 
         meatData=removeInvalidFlag(meatData)
-        if(imputationTimeWindow=="all"){meatData=removeNonProtectedFlag(meatData)}else{
-            meatData=removeNonProtectedFlag(meatData, keepDataUntil = (lastYear-2))}
+
+        if (imputationTimeWindow == "all") {
+          meatData = removeNonProtectedFlag(meatData)
+        } else if (imputationTimeWindow == "lastThree") {
+          meatData = removeNonProtectedFlag(meatData, keepDataUntil = (lastYear - 2))
+        } else if (imputationTimeWindow == "lastFive") {
+          meatData = removeNonProtectedFlag(meatData, keepDataUntil = (lastYear - 4))
+        }
         
         meatData = denormalise(normalisedData = meatData,
                                denormaliseKey = "measuredElement") 
@@ -678,9 +694,9 @@ for(iter in seq(selectedMeatCode)){
                                 returnData = FALSE,
                                 normalised = FALSE)
         
-        if(imputationTimeWindow!="lastThree"){
+        if (!imputationTimeWindow %in% c("lastThree", "lastFive")) {
             
-            noBalanced= ensureProductionBalanced(meatImputed,
+            noBalanced = ensureProductionBalanced(meatImputed,
                                                  meatFormParams$areaHarvestedValue,
                                                  meatFormParams$yieldValue,
                                                  meatFormParams$productionValue,
@@ -688,10 +704,10 @@ for(iter in seq(selectedMeatCode)){
                                                  normalised = FALSE,
                                                  getInvalidData=TRUE)
             
-            if(nrow(noBalanced)>0){ message("Warning: the triplet is not balanced after imputeProductionTriplet!")
-                message("Warning: the triplet is not balanced after imputeProductionTriplet!")
-                
-                if(!CheckDebug() ){
+            if (nrow(noBalanced) > 0) {
+              message("Warning: the triplet is not balanced after imputeProductionTriplet!")
+
+                if (!CheckDebug()) {
                     
                     createErrorAttachmentObject = function(testName,
                                                            testResult,
@@ -706,7 +722,7 @@ for(iter in seq(selectedMeatCode)){
                         errorAttachmentObject
                     }
                     
-                    bodyWithAttachmentNoBalanced=
+                    bodyWithAttachmentNoBalanced =
                         createErrorAttachmentObject(paste0("Not_balanced_Triplet_", currentMeatItem),
                                                     noBalanced,
                                                     R_SWS_SHARE_PATH)
@@ -909,37 +925,28 @@ for(iter in seq(selectedMeatCode)){
         ## module.
         ##
         
-        if(imputationTimeWindow=="lastThree")
-        {syncedData=syncedData[get(processingParameters$yearVar) %in% c(lastYear, lastYear-1, lastYear-2)]
+        if (imputationTimeWindow == "lastThree") {
+          syncedData = syncedData[get(processingParameters$yearVar) %in% (lastYear - 0:2)]
+        if (imputationTimeWindow == "lastFive") {
+          syncedData = syncedData[get(processingParameters$yearVar) %in% (lastYear - 0:4)]
+        }
+
+        syncedData = postProcessing(data = syncedData)  
+
+        syncedData = removeInvalidDates(syncedData)
+
+        ProtectedOverwritten = ensureProtectedData(syncedData[(flagObservationStatus =="I" & flagMethod == "e") |
+                                                                flagMethod == "i"|
+                                                                flagMethod == "c",], getInvalidData = TRUE)
         
-        syncedData=postProcessing(data =  syncedData)  
-        syncedData=removeInvalidDates(syncedData)
-        ProtectedOverwritten=ensureProtectedData(syncedData[(flagObservationStatus=="I" & flagMethod=="e") |
-                                                                flagMethod=="i"|
-                                                                flagMethod=="c",], getInvalidData = TRUE)
-        
-        ProtectedOverwritten=ProtectedOverwritten[measuredElement!= imputationParameters$areaHarvestedParams$variable,]
-        ProtectedOverwritten=ProtectedOverwritten[Value!=i.Value]
-        
+        ProtectedOverwritten = ProtectedOverwritten[measuredElement != imputationParameters$areaHarvestedParams$variable]
+
+        ProtectedOverwritten = ProtectedOverwritten[Value != i.Value]
+
         SaveData(domain = sessionKey@domain,
                  dataset = sessionKey@dataset,
                  data = syncedData)
-        }else{ 
-            syncedData=postProcessing(data =  syncedData)  
-            syncedData=removeInvalidDates(syncedData)
-            
-            ProtectedOverwritten=ensureProtectedData(syncedData[(flagObservationStatus=="I" & flagMethod=="e") |
-                                                                    flagMethod=="i"|
-                                                                    flagMethod=="c",], getInvalidData = TRUE)
-            
-            
-            
-            ProtectedOverwritten=ProtectedOverwritten[measuredElement!= imputationParameters$areaHarvestedParams$variable]
-            ProtectedOverwritten=ProtectedOverwritten[Value!=i.Value]
-            SaveData(domain = sessionKey@domain,
-                     dataset = sessionKey@dataset,
-                     data = syncedData)
-        }
+
         #---------------------------------------------------------------------         
         
         if(!CheckDebug() & length(ProtectedOverwritten)>0){
@@ -1063,8 +1070,13 @@ for(iter in seq(selectedMeatCode)){
                 modifiedFlagTable[flagObservationStatus=="I" & flagMethod=="-" , Protected:=TRUE]
                 
                 
-                if(imputationTimeWindow=="all"){nonMeatData=removeNonProtectedFlag(nonMeatData, flagValidTable = modifiedFlagTable)}else{
-                    nonMeatData=removeNonProtectedFlag(nonMeatData,flagValidTable = modifiedFlagTable, keepDataUntil = (lastYear-2))}
+                if (imputationTimeWindow == "all") {
+                  nonMeatData = removeNonProtectedFlag(nonMeatData, flagValidTable = modifiedFlagTable)
+                } else if (imputationTimeWindow == "lastThree") {
+                  nonMeatData = removeNonProtectedFlag(nonMeatData,flagValidTable = modifiedFlagTable, keepDataUntil = (lastYear-2))
+                } else if (imputationTimeWindow == "lastFive") {
+                  nonMeatData = removeNonProtectedFlag(nonMeatData,flagValidTable = modifiedFlagTable, keepDataUntil = (lastYear-4))
+                }
                 
                 
                 nonMeatData[measuredElement==nonMeatMeatFormulaParameters$areaHarvestedCode, ":="(c("Value", "flagObservationStatus", "flagMethod"),
@@ -1136,22 +1148,20 @@ for(iter in seq(selectedMeatCode)){
                 
                 slaughteredTransferToNonMeatChildData=slaughteredTransferToNonMeatChildData[flagMethod!="u", ]
                 
-                if(imputationTimeWindow=="lastThree")
-                {   slaughteredTransferToNonMeatChildData=slaughteredTransferToNonMeatChildData[get(processingParameters$yearVar) %in% c(lastYear, lastYear-1, lastYear-2)]
-                slaughteredTransferToNonMeatChildData = removeInvalidDates(data =slaughteredTransferToNonMeatChildData, context = sessionKey)
-                slaughteredTransferToNonMeatChildData= postProcessing(data =  slaughteredTransferToNonMeatChildData) 
+                if (imputationTimeWindow == "all") {
+                  slaughteredTransferToNonMeatChildData = postProcessing(data = slaughteredTransferToNonMeatChildData)
+                } else if (imputationTimeWindow == "lastThree") {
+                  slaughteredTransferToNonMeatChildData = slaughteredTransferToNonMeatChildData[get(processingParameters$yearVar) %in% (lastYear - 0:2)]
+                } else if (imputationTimeWindow == "lastFive") {
+                  slaughteredTransferToNonMeatChildData = slaughteredTransferToNonMeatChildData[get(processingParameters$yearVar) %in% (lastYear - 0:4)]
+                }
+
+                slaughteredTransferToNonMeatChildData = removeInvalidDates(data = slaughteredTransferToNonMeatChildData, context = sessionKey)
+                slaughteredTransferToNonMeatChildData = postProcessing(data = slaughteredTransferToNonMeatChildData) 
+
                 SaveData(domain = sessionKey@domain,
                          dataset = sessionKey@dataset,
                          data = slaughteredTransferToNonMeatChildData)
-                }else{ 
-                    slaughteredTransferToNonMeatChildData= postProcessing(data =  slaughteredTransferToNonMeatChildData) 
-                    slaughteredTransferToNonMeatChildData = removeInvalidDates(data =slaughteredTransferToNonMeatChildData, context = sessionKey)
-                    slaughteredTransferToNonMeatChildData= postProcessing(data =  slaughteredTransferToNonMeatChildData) 
-                    SaveData(domain = sessionKey@domain,
-                             dataset = sessionKey@dataset,
-                             data = slaughteredTransferToNonMeatChildData)
-                }
-                
             }
             
             

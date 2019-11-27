@@ -79,6 +79,7 @@ if(CheckDebug()){
 imputationSelection = swsContext.computationParams$imputation_selection
 imputationTimeWindow = swsContext.computationParams$imputation_timeWindow
 
+stopifnot(imputationTimeWindow %in% c("all", "lastThree", "lastFive"))
 
 ##' Check the validity of the computational parameter
 if(!imputationSelection %in% c("session", "all"))
@@ -230,16 +231,19 @@ for(iter in seq(selectedItemCode)){
                ##            valueVar = processingParameters$valueVar,
                ##            newYears= lastYear) %>%
                 
-          if(imputationTimeWindow=="all"){processedData=removeNonProtectedFlag(processedData)}else{
-              processedData=removeNonProtectedFlag(processedData, keepDataUntil = (lastYear-2))}
-            
-                
-                
-           processedData =  denormalise(normalisedData = processedData,
+          if (imputationTimeWindow == "all") {
+            processedData = removeNonProtectedFlag(processedData)
+          } else if (imputationTimeWindow == "lastThree") {
+            processedData = removeNonProtectedFlag(processedData, keepDataUntil = (lastYear-2))
+          } else if (imputationTimeWindow == "lastFive") {
+            processedData = removeNonProtectedFlag(processedData, keepDataUntil = (lastYear-4))
+          }
+
+          processedData =  denormalise(normalisedData = processedData,
                                         denormaliseKey = "measuredElement",
                                         fillEmptyRecords = TRUE) 
            
-           processedData = createTriplet(data = processedData, formula = formulaTable)
+          processedData = createTriplet(data = processedData, formula = formulaTable)
             
 
             
@@ -358,25 +362,18 @@ for(iter in seq(selectedItemCode)){
                 
                 ##I should send to the data.base also the (M,-) value added in the last year in order to highlight that the series is closed.
                 
-                if(imputationTimeWindow=="lastThree")
-                {
-                    imputed=imputed[get(processingParameters$yearVar) %in% c(lastYear, lastYear-1, lastYear-2)]
-                    imputed= postProcessing(data =  imputed) 
-                    SaveData(domain = sessionKey@domain,
-                             dataset = sessionKey@dataset,
-                             data =  imputed)
-                    
-                    
-                }else{
-                
-                
-                imputed= postProcessing(data =  imputed) 
+                if (imputationTimeWindow == "lastThree") {
+                  imputed = imputed[get(processingParameters$yearVar) %in% (lastYear - 0:2)]
+                } else if (imputationTimeWindow == "lastFive") {
+                  imputed = imputed[get(processingParameters$yearVar) %in% (lastYear - 0:4)]
+                }
+
+                imputed = postProcessing(data =  imputed) 
+
                 SaveData(domain = sessionKey@domain,
                          dataset = sessionKey@dataset,
                          data =  imputed)
                     
-                }
-
         })
 
     ## Capture the items that failed
