@@ -17,7 +17,7 @@ library(faoswsFlag)
 
 
 # Set-up the test environement and parameters
-USER<-"aydan"
+USER<-"amsa"
 
 if(USER=="amsa"){
   
@@ -43,6 +43,10 @@ if (CheckDebug()) {
 }
 
 
+startYear = swsContext.computationParams$start_year
+endYear = swsContext.computationParams$end_year
+geoM49 = swsContext.computationParams$geom49
+
 # Set-up the parameters
 startYear <- 2014
 endYear <- 2018
@@ -55,18 +59,24 @@ yearVals <- (startYear-window):endYear
 # Read the data needed
 flagValidTable <- ReadDatatable("valid_flags")
 
+mapping <- ReadDatatable("animal_parent_child_mapping")
+
+
 livestock_triplet_lst_1 <- list(input="5111", output="5315", productivity="9999") # delete after
+livestock_triplet_lst_1bis <- list(input="5112", output="5316", productivity="9999") # delete after
+
 livestock_triplet_lst_2 <- list(input="5320", output="5510", productivity="5417") # delete after
+
+livestock_triplet_lst_2bis <- list(input="5321", output="5510", productivity="5424") # delete after
+
+crop_triplet_lst<-list(input="5312",output="5510",productivity="5421")
+
 
 #triplets <- ReadDatatable("item_type_yield_elements")
 #triplets$element_41[19] = "9999"# delete after off-take rate saved
 data <- readRDS(paste0("//hqlprsws1.hq.un.fao.org/sws_r_share/mongeau/tmp/production_outliers/data/production/", COUNTRY, ".rds"))
 
-data <- merge(
-  data,
-  flagValidTable,
-  by=c("flagObservationStatus","flagMethod")
-)
+
 
 # itemMap <- GetCodeList(domain = "agriculture", dataset = "aproduction", "measuredItemCPC")
 # itemMap <- itemMap[!is.na(type), .(measuredItemCPC = code, item_type = type)]  
@@ -107,8 +117,8 @@ data <- merge(
 # data <- merge(data, map_items, by = c("measuredElement", "measuredItemCPC"), all.x = TRUE)
 
 ## To be deleted after off-take inserted
-pathtoofftake = paste0("R:\\Livestock\\validationFAODOMAIN_rosa\\",
-                       list.files("R:\\Livestock\\validationFAODOMAIN_rosa\\"))
+pathtoofftake = paste0("S:\\Livestock\\validationFAODOMAIN_rosa\\",
+                       list.files("S:\\Livestock\\validationFAODOMAIN_rosa\\"))
 
 data_list <- lapply(pathtoofftake,read.csv)
 
@@ -130,7 +140,35 @@ setnames(data_offtake, "TakeOffFlagObservationStatus", "flagObservationStatus")
 setnames(data_offtake, "TakeOffRateFlagMethod", "flagMethod")
 data_offtake$geographicAreaM49 <- as.character(data_offtake$geographicAreaM49)
 data_offtake$timePointYears <- as.character(data_offtake$timePointYears)
-data <- merge(data, data_offtake, by = c("geographicAreaM49", "timePointYears", "measuredItemCPC", "flagObservationStatus", "flagMethod"), all.x = TRUE)
+setnames(data_offtake,"takeOffRate","Value")
+
+data_offtake[,measuredElement:=9999] #arbitrary
+data_offtakecomplete <-
+    CJ(
+        geographicAreaM49 = unique(data_offtake$geographicAreaM49),
+        measuredElement = 9999,
+        timePointYears = unique(data$timePointYears),
+        measuredItemCPC = unique(data_offtake$measuredItemCPC)
+    )
+
+data_offtake<-merge(
+    data_offtakecomplete,
+    data_offtake,
+    by=c("geographicAreaM49","timePointYears","measuredItemCPC","measuredElement"),
+    all=TRUE
+)
+
+data_offtake<-data_offtake[,names(data),with=FALSE] #arbitrary
+
+
+data<-rbind(data,data_offtake)
+
+data <- merge(
+    data,
+    flagValidTable,
+    by=c("flagObservationStatus","flagMethod")
+)
+# data <- merge(data, data_offtake, by = c("geographicAreaM49", "timePointYears", "measuredItemCPC", "flagObservationStatus", "flagMethod"), all.x = TRUE)
 
 #### FUNCTIONS #####
 
@@ -199,16 +237,16 @@ imput_with_average <- function(data,element){
   
   data_element<-data[measuredElement %in% element]
   
-  # data_element[,
-  #              Meanold := mean(Value[timePointYears %in% interval], na.rm = TRUE),
-  #              by = c('geographicAreaM49', 'measuredItemCPC', 'measuredElement')
-  #              ]
-  # 
-  # data_element[is.na(data$Value), Value := 0]
-  # 
-  # data_element[, ratio := Value / Meanold]
-  # 
-  # data_element[,is_outlier:=ifelse(abs(ratio-1) > THRESHOLD_IMPUTED & Protected==FALSE,TRUE,FALSE)]
+  data_element[,
+               Meanold := mean(Value[timePointYears %in% interval], na.rm = TRUE),
+               by = c('geographicAreaM49', 'measuredItemCPC', 'measuredElement')
+               ]
+
+  data_element[is.na(data$Value), Value := 0]
+
+  data_element[, ratio := Value / Meanold]
+
+  data_element[,is_outlier:=ifelse(abs(ratio-1) > THRESHOLD_IMPUTED & Protected==FALSE,TRUE,FALSE)]
   # 
   data_element[,value_new:=Value]
   data_element[timePointYears>2013,value_new:=NA]
@@ -220,7 +258,7 @@ imput_with_average <- function(data,element){
       by = c("geographicAreaM49", "measuredElement", "measuredItemCPC")
       ]
   
-  data_element[isOutlier_productivity==TRUE,`:=`(Value=value_avg,
+  data_element[is_outlier==TRUE,`:=`(Value=value_avg,
                                                  flagObservationStatus="I",
                                                  flagMethod="e")]
   
@@ -257,12 +295,16 @@ compute_movav<-function(data=data_crop,element="5510",type="output") {
 #Correcting outliers
 #Parametrize input var, output var and productivity var
 
-correctInputOutput<-function(data=data_crop,
-                             triplet=crop_triplet_lst
+correctInputOutput<-function(data=data,
+                             triplet=livestock_triplet_lst_1
 ) {
-  imput_with_average(data,triplet$productivity)
+  data<-imput_with_average(data,triplet$productivity)
   
   data <- data[measuredElement %in% triplet]
+  inteminput<-data[measuredElement %in% triplet$input,get("measuredItemCPC")]
+  
+  data<-data[measuredItemCPC %in% inteminput]
+  data<- dcast.data.table(data, geographicAreaM49 + measuredItemCPC + timePointYears ~ measuredElement, value.var = list('Value', 'Protected'))
   
   
   Label_outlier(data=data,element=triplet$output,type="output")
@@ -271,13 +313,10 @@ correctInputOutput<-function(data=data_crop,
   Label_outlier(data=data,element=triplet$input,type="input")
   compute_movav(data=data,element=triplet$input,type="input")
   
-  input = crop_triplet_lst$input
-  output =crop_triplet_lst$output
-  productivity = crop_triplet_lst$productivity
   
-  input<-paste0("Value_",input)
-  output<-paste0("Value_",output)
-  productivity<-paste0("Value_",productivity)
+  input<-paste0("Value_",triplet$input)
+  output<-paste0("Value_",triplet$output)
+  productivity<-paste0("Value_",triplet$productivity)
   
   data[isOutlier_input==TRUE & isOutlier_output==TRUE,c(output):=movav_output]
   data[isOutlier_input==TRUE & isOutlier_output==TRUE,c(input):=movav_output/get(productivity)]
@@ -296,77 +335,99 @@ correctInputOutput<-function(data=data_crop,
   #update the productivity
   data[,c(productivity):=ifelse(get(input)!=0,get(output)/get(input),NA)]
   
+  # data<-correctInputOutput(data,triplet = crop_triplet_lst)
+  
+  id.vars=c("geographicAreaM49","timePointYears","measuredItemCPC")
+  data<-data[,c(id.vars,grep("^Value",names(data),value = TRUE)),with=FALSE]
+  
+  data<-melt(data, id.vars=c("geographicAreaM49","timePointYears",
+                                       "measuredItemCPC"), grep("^Value",names(data),value = TRUE),
+                  variable.name = "measuredElement", value.name = "value_new")
+  
+  data[,measuredElement:=substr(measuredElement,start = 7,stop = 10)]
+  # finalCrop[value_new==Inf,value_new:=NA_real_]
+  
+  
   return(data)
   
 }
 
+finalCrop<-correctInputOutput(data,triplet = crop_triplet_lst)
 
-# Define the triplets: INPUT, OUTPUT and PRODUCTIVITY
-# TO DO: write a function for triplet selection
+finalliv<-correctInputOutput(data,triplet = livestock_triplet_lst_1)
 
-crop_triplet<-as.vector(triplets[item_type=="CRPR"])
-
-crop_triplet_lst<-list(input="5312",output="5510",productivity="5421")
-
-# crop_triplet_vec<-c("5312","5421","5510")
-
-data_crop<-data[measuredElement %in% crop_triplet_vec]
+setnames(mapping,"measured_item_parent_cpc","measuredItemCPC")
+setnames(mapping,"measured_element_parent","measuredElement")
 
 
+datamerged<-merge(
+    data,
+    mapping,
+    by=c("measuredElement", "measuredItemCPC")
+)
 
-#### First step: automatic outlier check and correct for PRODUCTIVITY ####
-# Select the productivity of your triplet
-productivity_vars <- c("5421")
+datamerged<-datamerged[,list(geographicAreaM49,timePointYears,
+                             measuredElement=measured_element_child,
+                             measuredItemCPC=measured_item_child_cpc,
+                             Value,flagObservationStatus,flagMethod,
+                             Valid,Protected)
+                       ]
 
-# Find and correct of outliers of productivity
-data_crop <- imput_with_average(data=data_crop,"5421")
+datamerged<-datamerged[,names(data),with=FALSE]
 
-data_crop <- dcast.data.table(data_crop, geographicAreaM49 + measuredItemCPC + timePointYears ~ measuredElement, value.var = list('Value', 'Protected'))
-
-
-
-# correctInputOutput(data_crop,
-#                    input = crop_triplet_lst$input,
-#                    output =crop_triplet_lst$output,
-#                    productivity = crop_triplet_lst$productivity
-#                    )
-
-
-finalCrop<-correctInputOutput(data_crop,triplet = crop_triplet_lst)
-
-id.vars=c("geographicAreaM49","timePointYears","measuredItemCPC")
-finalCrop<-finalCrop[,c(id.vars,grep("^Value",names(finalCrop),value = TRUE)),with=FALSE]
-
-finalCrop<-melt(finalCrop, id.vars=c("geographicAreaM49","timePointYears",
-                                     "measuredItemCPC"), grep("^Value",names(finalCrop),value = TRUE),
-                variable.name = "measuredElement", value.name = "value_new")
-
-finalCrop[,measuredElement:=substr(measuredElement,start = 7,stop = 10)]
-finalCrop[value_new==Inf,value_new:=NA_real_]
+data<-rbind(
+    data,
+    datamerged[!data, on=c('geographicAreaM49', 'timePointYears',
+                           'measuredItemCPC', 'measuredElement')]
+)
 
 
+finalliv2<-correctInputOutput(data,triplet = livestock_triplet_lst_2)
+
+# poultry<-correctInputOutput(data,triplet = livestock_triplet_lst_1bis)
+#seconde triplet
+
+
+
+
+finalData<-rbind(finalCrop,finalliv,finalliv2)
 
 data<-merge(
   data,
-  finalCrop,
+  finalData,
   by=c("geographicAreaM49","timePointYears","measuredElement", "measuredItemCPC"),
   all.x = TRUE
 )
 
 data[,difference:=value_new-Value]
-View(data)
+
+#datatosend via email
+
+dataToSend<-data[Protected==FALSE & !is.na(value_new) & difference!=0 & timePointYears>2013]
+
+data[Protected==FALSE & !is.na(value_new) &
+         difference!=0 & timePointYears>2013,`:=`(Value=value_new,
+                                                               flagObservationStatus="E",
+                                                               flagMethod="e")]
+data[,value_new:=NULL]
 
 
-########## PLOTS #########
 
-dataplot<-data[measuredElement=="5312" & measuredItemCPC=="01379.90" & timePointYears>2000]
 
-library(ggplot2)
 
-ggplot(dataplot)+
-  geom_line(aes(as.numeric(timePointYears),Value),
-            size=1, color="green")+
-  geom_line(aes(as.numeric(timePointYears),value_new),
-            size=1, color="red")
+# View(data)
+# 
+# 
+# ########## PLOTS #########
+# 
+# dataplot<-data[measuredElement=="5312" & measuredItemCPC=="01379.90" & timePointYears>2000]
+# 
+# library(ggplot2)
+# 
+# ggplot(dataplot)+
+#   geom_line(aes(as.numeric(timePointYears),Value),
+#             size=1, color="green")+
+#   geom_line(aes(as.numeric(timePointYears),value_new),
+#             size=1, color="red")
 
 
