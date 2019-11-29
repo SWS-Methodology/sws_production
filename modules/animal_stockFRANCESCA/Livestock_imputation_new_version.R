@@ -177,8 +177,8 @@ animalMeatMappingTable <-
     .(
       measuredItemParentCPC = measured_item_parent_cpc,
       measuredElementParent = measured_element_parent,
-      measuredItemChildCPC = measured_item_child_cpc,
-      measuredElementChild = measured_element_child
+      measuredItemChildCPC  = measured_item_child_cpc,
+      measuredElementChild  = measured_element_child
     )
   ]
 
@@ -248,18 +248,18 @@ for (iter in seq(selectedMeatCode)) {
         currentMeatItem <- selectedMeatCode[iter]
 
         currentMappingTable <-
-            animalMeatMappingTable[measuredItemChildCPC == currentMeatItem, ]
+          animalMeatMappingTable[measuredItemChildCPC == currentMeatItem, ]
 
         ##animal
         currentAnimalItem <- currentMappingTable[, measuredItemParentCPC]
 
         ##all derived
         currentAllDerivedProduct <-
-            animalMeatMappingTable[measuredItemParentCPC == currentAnimalItem, measuredItemChildCPC]
+          animalMeatMappingTable[measuredItemParentCPC == currentAnimalItem, measuredItemChildCPC]
 
         ##derived non meat
         currentNonMeatItem <-
-            currentAllDerivedProduct[currentAllDerivedProduct != currentMeatItem]
+          currentAllDerivedProduct[currentAllDerivedProduct != currentMeatItem]
 
         # Remove offals, hides and skins as there is a dedicated plugin
         currentNonMeatItem <-
@@ -362,7 +362,7 @@ for (iter in seq(selectedMeatCode)) {
 
         ##  Get new trade data
 
-        itemMap <- itemMap[,.(measuredItemCPC = code,type)]
+        itemMap <- itemMap[, .(measuredItemCPC = code,type)]
 
         data <- merge(animalData, itemMap, by = "measuredItemCPC")
 
@@ -394,7 +394,7 @@ for (iter in seq(selectedMeatCode)) {
         ##    stockTrade=animalData
         ##    stockTrade=denormalise(stockTrade, denormaliseKey = "measuredElement", fillEmptyRecords=TRUE )
 
-        animalData <- denormalise(animalData, denormaliseKey = "measuredElement", fillEmptyRecords=TRUE )
+        animalData <- denormalise(animalData, denormaliseKey = "measuredElement", fillEmptyRecords = TRUE )
 
         ## ---------------------------------------------------------------------
         ## Imputation of animal Stock
@@ -469,7 +469,7 @@ for (iter in seq(selectedMeatCode)) {
           merge(
             stockImputed,
             slaughteredAnimalData,
-            by = c("geographicAreaM49", "measuredItemCPC", "timePointYears"),
+            by    = c("geographicAreaM49", "measuredItemCPC", "timePointYears"),
             all.x =  TRUE,
             all.y =  TRUE
           )
@@ -482,7 +482,7 @@ for (iter in seq(selectedMeatCode)) {
         # Imputations of offtake are here
         slaughteredParentData <-
           computeTotSlaughtered(
-            data = stockSlaughtered,
+            data              = stockSlaughtered,
             FormulaParameters = animalFormulaParameters
           )
 
@@ -657,10 +657,10 @@ for (iter in seq(selectedMeatCode)) {
           )
 
         ensureCorrectTransfer(
-          parentData = slaughteredParentData,
-          childData = slaughteredTransferedToMeatData,
+          parentData   = slaughteredParentData,
+          childData    = slaughteredTransferedToMeatData,
           mappingTable = animalMeatMappingShare,
-          returnData = FALSE
+          returnData   = FALSE
         )
 
         ## ---------------------------------------------------------------------
@@ -682,8 +682,8 @@ for (iter in seq(selectedMeatCode)) {
 
         meatImputed <-
           denormalise(
-            normalisedData = meatImputed,
-            denormaliseKey = "measuredElement",
+            normalisedData  = meatImputed,
+            denormaliseKey  = "measuredElement",
             fillEmptyRecord = TRUE
           )
 
@@ -803,11 +803,11 @@ for (iter in seq(selectedMeatCode)) {
           )
 
         ensureProductionOutputs(
-          data = meatImputed,
+          data                 = meatImputed,
           processingParameters = processingParameters,
-          formulaParameters = meatFormulaParameters,
-          returnData = FALSE,
-          normalised = FALSE
+          formulaParameters    = meatFormulaParameters,
+          returnData           = FALSE,
+          normalised           = FALSE
         )
 
         if (!imputationTimeWindow %in% c("lastThree", "lastFive")) {
@@ -967,8 +967,7 @@ for (iter in seq(selectedMeatCode)) {
               )
             ]
 
-            meatImputed[, newS:=NULL]
-            meatImputed[, newP:=NULL]
+            meatImputed[, c("newS", "newP") := NULL]
 
             ## table(meatImputed[,.(flagMethod_measuredElement_5320,flagMethod_measuredElement_5417,flagMethod_measuredElement_5510)])
         }
@@ -1250,12 +1249,12 @@ for (iter in seq(selectedMeatCode)) {
                 ## non-meat item
                 slaughteredTransferToNonMeatChildData <-
                     transferParentToChild(
-                      parentData = slaughteredTransferedBackToAnimalData,
-                      childData = nonMeatData,
-                      transferMethodFlag="c",
+                      parentData                = slaughteredTransferedBackToAnimalData,
+                      childData                 = nonMeatData,
+                      transferMethodFlag        = "c",
                       imputationObservationFlag = "I",
-                      mappingTable = animalNonMeatMappingShare,
-                      parentToChild = TRUE
+                      mappingTable              = animalNonMeatMappingShare,
+                      parentToChild             = TRUE
                     )
 
                 nonMeatImputationParameters <-
@@ -1308,10 +1307,10 @@ for (iter in seq(selectedMeatCode)) {
 
                 nonMeatImputed <-
                   imputeProductionTriplet(
-                    data = slaughteredTransferToNonMeatChildData,
+                    data                 = slaughteredTransferToNonMeatChildData,
                     processingParameters = processingParameters,
                     imputationParameters = nonMeatImputationParameters,
-                    formulaParameters = nonMeatMeatFormulaParameters
+                    formulaParameters    = nonMeatMeatFormulaParameters
                   )
 
                 nonMeatImputedList[[j]] <- normalise(nonMeatImputed)
