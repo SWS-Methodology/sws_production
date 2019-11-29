@@ -259,9 +259,6 @@ if (CheckDebug()) {
   sink(file = logConsole1, append = TRUE, type = "message")
 }
 
-itemMap <- GetCodeList(domain = "agriculture", dataset = "aproduction", "measuredItemCPC")
-stopifnot(nrow(itemMap) > 0)
-
 # NOTE: this used to come from the faoswsFlag package.
 # XXX: There are some discrepancies in the two tables (pkg and SWS)
 flagValidTable <- ReadDatatable("valid_flags")
@@ -296,6 +293,9 @@ for (iter in seq(selectedMeatCode)) {
         ##derived non meat
         currentNonMeatItem <-
           currentAllDerivedProduct[currentAllDerivedProduct != currentMeatItem]
+
+        itemMap <- GetCodeList(domain = "agriculture", dataset = "aproduction", "measuredItemCPC")
+        stopifnot(nrow(itemMap) > 0)
 
         # Remove offals, hides and skins as there is a dedicated plugin
         currentNonMeatItem <-
