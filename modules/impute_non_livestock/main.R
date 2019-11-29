@@ -85,6 +85,10 @@ stopifnot(imputationTimeWindow %in% c("all", "lastThree", "lastFive"))
 if(!imputationSelection %in% c("session", "all"))
     stop("Incorrect imputation selection specified")
 
+FIX_OUTLIERS <- as.logical(swsContext.computationParams$fix_outliers)
+THRESHOLD <- as.numeric(swsContext.computationParams$outliers_threshold)
+AVG_YEARS <- 2009:2013
+
 ##' Get data configuration and session
 sessionKey <- swsContext.datasets[[1]]
 datasetConfig <- GetDatasetConfig(domainCode = sessionKey@domain,
@@ -137,6 +141,9 @@ selectedItemCode <-
     switch(imputationSelection,
            "session" = sessionItems,
            "all" = nonLivestockImputationItems)
+
+flagValidTable <- ReadDatatable("valid_flags")
+stopifnot(nrow(flagValidTable) > 0)
 
 ##' ---
 ##' ## Perform Imputation
@@ -310,10 +317,16 @@ for (iter in seq(selectedItemCode)) {
             ## Perform imputation
             imputed <-
               imputeProductionTriplet(
-                data                 = processedData,
-                processingParameters = processingParameters,
-                formulaParameters    = formulaParameters,
-                imputationParameters = imputationParameters
+                data                  = processedData,
+                processingParameters  = processingParameters,
+                formulaParameters     = formulaParameters,
+                imputationParameters  = imputationParameters,
+                completeImputationKey = completeImputationKey,
+                imputationTimeWindow  = imputationTimeWindow,
+                flagValidTable        = flagValidTable,
+                FIX_OUTLIERS          = FIX_OUTLIERS,
+                THRESHOLD             = THRESHOLD,
+                AVG_YEARS             = AVG_YEARS
             )
 
 ##------------------------------------------------------------------------------------------------------------------------
@@ -382,7 +395,8 @@ for (iter in seq(selectedItemCode)) {
             imputed <-
               imputed[
                 (flagMethod == "i" | (flagObservationStatus == "I" & flagMethod == "e")) |
-                  (flagObservationStatus == "M" & flagMethod == "-"),]
+                  (flagObservationStatus == "M" & flagMethod == "-") |
+                  (flagObservationStatus == "E" & flagMethod == "e"),]
 
             ##I should send to the data.base also the (M,-) value added in the last year in order to highlight that the series is closed.
 
@@ -440,7 +454,6 @@ if (nrow(imputationResult) > 0) {
 }
 
 msg <- "Imputation Completed Successfully"
-message(msg)
 
 if (!CheckDebug()) {
   ## Initiate email

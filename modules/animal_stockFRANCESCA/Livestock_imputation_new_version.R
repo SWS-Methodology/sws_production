@@ -106,6 +106,33 @@ suppressMessages({
     library(sendmailR)
 })
 
+# TODO: Should be moved to R/
+rollavg <- function(x, order = 3) {
+  # order should be > 2
+  stopifnot(order >= 3)
+  
+  non_missing <- sum(!is.na(x))
+  
+  # For cases that have just two non-missing observations
+  order <- ifelse(order > 2 & non_missing == 2, 2, order)
+  
+  if (non_missing == 1) {
+    x[is.na(x)] <- na.omit(x)[1]
+  } else if (non_missing >= order) {
+    n <- 1
+    while(any(is.na(x)) & n <= 10) { # 10 is max tries
+      movav <- suppressWarnings(RcppRoll::roll_mean(x, order, fill = 'extend', align = 'right'))
+      movav <- data.table::shift(movav)
+      x[is.na(x)] <- movav[is.na(x)]
+      n <- n + 1
+    }
+    
+    x <- zoo::na.fill(x, 'extend')
+  }
+  
+  return(x)
+}
+
 ##' Get the shared path
 R_SWS_SHARE_PATH <- Sys.getenv("R_SWS_SHARE_PATH")
 
@@ -149,7 +176,7 @@ datasetConfig <- GetDatasetConfig(domainCode = sessionKey@domain,
 
 ##' Build processing parameters
 processingParameters <-
-    productionProcessingParameters(datasetConfig = datasetConfig)
+  productionProcessingParameters(datasetConfig = datasetConfig)
 
 lastYear <- max(as.numeric(swsContext.computationParams$last_year))
 
@@ -157,7 +184,11 @@ lastYear <- max(as.numeric(swsContext.computationParams$last_year))
 completeImputationKey <- getCompleteImputationKey("production")
 
 completeImputationKey@dimensions$timePointYears@keys <-
-    as.character(min(completeImputationKey@dimensions$timePointYears@keys):lastYear)
+  as.character(min(completeImputationKey@dimensions$timePointYears@keys):lastYear)
+
+FIX_OUTLIERS <- as.logical(swsContext.computationParams$fix_outliers)
+THRESHOLD <- as.numeric(swsContext.computationParams$outliers_threshold)
+AVG_YEARS <- 2009:2013
 
 ##' Extract the animal parent to child commodity mapping table
 ##'
@@ -230,6 +261,11 @@ if (CheckDebug()) {
 
 itemMap <- GetCodeList(domain = "agriculture", dataset = "aproduction", "measuredItemCPC")
 stopifnot(nrow(itemMap) > 0)
+
+# NOTE: this used to come from the faoswsFlag package.
+# XXX: There are some discrepancies in the two tables (pkg and SWS)
+flagValidTable <- ReadDatatable("valid_flags")
+stopifnot(nrow(flagValidTable) > 0)
 
 imputationResult <- data.table()
 
@@ -320,11 +356,11 @@ for (iter in seq(selectedMeatCode)) {
         ## the off-take  rate that is endogenously computed (eventually using trade) and then imputed.
 
         animalKey <- completeImputationKey
+
         animalKey@dimensions$measuredItemCPC@keys <- currentAnimalItem
 
         animalKey@dimensions$measuredElement@keys <-
-            with(animalFormulaParameters,
-                 c(productionCode))
+          animalFormulaParameters$productionCode
 
         ## Get the animal data (NB: preProcessing: manage NA M and transform timePointYears)
         animalData <-
@@ -418,6 +454,102 @@ for (iter in seq(selectedMeatCode)) {
 
         stockImputed <- imputeVariable(animalData, imputationParameters = animalStockImputationParameters)
 
+        if (FIX_OUTLIERS == TRUE) {
+
+          orig_cols <- names(stockImputed)
+
+          if (imputationTimeWindow == "all") {
+            val_years <- completeImputationKey@dimensions$timePointYears@keys
+          } else {
+            val_years <-
+              lastYear - 0:switch(imputationTimeWindow, "lastThree" = 2, "lastFive" = 4)
+          }
+
+          stockImputed <-
+            flagValidTable[
+              stockImputed,
+              on = c("flagObservationStatus" = animalFormulaParameters$productionObservationFlag,
+                     "flagMethod" = animalFormulaParameters$productionMethodFlag)
+            ]
+
+          setnames(
+            stockImputed,
+            c("flagObservationStatus", "flagMethod"),
+            c(animalFormulaParameters$productionObservationFlag, animalFormulaParameters$productionMethodFlag)
+          )
+
+          stockImputed[,
+            `:=`(
+              mean_old =
+                mean(
+                  get(animalFormulaParameters$productionValue)[
+                    get(animalStockImputationParameters$yearValue) %in% AVG_YEARS
+                  ]
+                ),
+              mean_protected =
+                mean(
+                  get(animalFormulaParameters$productionValue)[
+                    get(animalStockImputationParameters$yearValue) %in% (max(AVG_YEARS) + 1):max(val_years) &
+                      sum(Protected[get(animalStockImputationParameters$yearValue) %in% (max(AVG_YEARS) + 1):max(val_years)]) >= 2 &
+                      Protected == TRUE
+                  ]
+                )
+            ),
+            by = c(animalStockImputationParameters$byKey)
+          ]
+
+          stockImputed[is.nan(mean_old), mean_old := NA_real_]
+          stockImputed[is.nan(mean_protected), mean_protected := NA_real_]
+
+          # NOTE: some NA ratios are due to M- series
+          stockImputed[,
+            `:=`(
+              ratio_old       = get(animalFormulaParameters$productionValue) / mean_old,
+              ratio_protected = get(animalFormulaParameters$productionValue) / mean_protected
+            )
+          ]
+
+          stockImputed[is.infinite(ratio_old), ratio_old := NA_real_]
+          stockImputed[is.infinite(ratio_protected), ratio_protected := NA_real_]
+
+          stockImputed[, ratio := ifelse(!is.na(ratio_protected), ratio_protected, ratio_old)]
+
+          stockImputed[, outlier := FALSE]
+
+          stockImputed[
+            get(animalStockImputationParameters$yearValue) %in% val_years &
+              Protected == FALSE,
+            outlier := abs(ratio - 1) > THRESHOLD
+          ]
+
+          stockImputed[
+            outlier == TRUE,
+            (animalFormulaParameters$productionValue) := NA_real_
+          ]
+
+          stockImputed[,
+            movav :=
+              rollavg(
+                get(animalFormulaParameters$productionValue),
+                order = 3
+              ),
+              by = c(animalStockImputationParameters$byKey)
+          ]
+
+          stockImputed[
+            outlier == TRUE & !is.na(movav),
+            `:=`(
+              c(animalFormulaParameters$productionValue,
+              animalFormulaParameters$productionObservationFlag,
+              animalFormulaParameters$productionMethodFlag),
+              # Flags are Ee to differentiate them from Ie
+              list(movav, "E", "e")
+            )
+          ]
+
+          stockImputed <- stockImputed[, orig_cols, with = FALSE]
+        }
+
         ##---------------------------------------------------------------------------------------------------------
 
         ##Pull slaughtered Animail (code referrig to ANIMAL)
@@ -482,8 +614,13 @@ for (iter in seq(selectedMeatCode)) {
         # Imputations of offtake are here
         slaughteredParentData <-
           computeTotSlaughtered(
-            data              = stockSlaughtered,
-            FormulaParameters = animalFormulaParameters
+            data                  = stockSlaughtered,
+            FormulaParameters     = animalFormulaParameters,
+            FIX_OUTLIERS          = FIX_OUTLIERS,
+            THRESHOLD             = THRESHOLD,
+            AVG_YEARS             = AVG_YEARS,
+            imputationTimeWindow  = imputationTimeWindow,
+            completeImputationKey = completeImputationKey
           )
 
         # Before Saving this data in the shared folder I change the off-take method flag which is: "i". It is now "c"
@@ -799,7 +936,13 @@ for (iter in seq(selectedMeatCode)) {
             data                 = meatImputed,
             processingParameters = processingParameters,
             imputationParameters = imputationParameters,
-            formulaParameters    = meatFormulaParameters
+            formulaParameters    = meatFormulaParameters,
+            completeImputationKey = completeImputationKey,
+            imputationTimeWindow  = imputationTimeWindow,
+            flagValidTable        = flagValidTable,
+            FIX_OUTLIERS          = FIX_OUTLIERS,
+            THRESHOLD             = THRESHOLD,
+            AVG_YEARS             = AVG_YEARS
           )
 
         ensureProductionOutputs(
@@ -991,7 +1134,7 @@ for (iter in seq(selectedMeatCode)) {
         ## I am filtering meatImputed in order to avoid issue 180
 
         meatImputedFilterd <-
-            meatImputed[flagMethod == "i" | (flagObservationStatus == "I" & flagMethod == "e"), ]
+            meatImputed[flagMethod == "i" | (flagObservationStatus == "I" & flagMethod == "e") | (flagObservationStatus == "E" & flagMethod == "e"), ]
 
         slaughteredTransferedBackToAnimalData <-
           transferParentToChild(
@@ -1310,7 +1453,13 @@ for (iter in seq(selectedMeatCode)) {
                     data                 = slaughteredTransferToNonMeatChildData,
                     processingParameters = processingParameters,
                     imputationParameters = nonMeatImputationParameters,
-                    formulaParameters    = nonMeatMeatFormulaParameters
+                    formulaParameters    = nonMeatMeatFormulaParameters,
+                    completeImputationKey = completeImputationKey,
+                    imputationTimeWindow  = imputationTimeWindow,
+                    flagValidTable        = flagValidTable,
+                    FIX_OUTLIERS          = FIX_OUTLIERS,
+                    THRESHOLD             = THRESHOLD,
+                    AVG_YEARS             = AVG_YEARS
                   )
 
                 nonMeatImputedList[[j]] <- normalise(nonMeatImputed)
@@ -1353,7 +1502,7 @@ for (iter in seq(selectedMeatCode)) {
         imputationResult <-
           rbind(
             imputationResult,
-            data.table(item = currentItem, error = imputationProcess[iter])
+            data.table(item = currentMeatItem, error = imputationProcess[iter])
           )
     }
 }
@@ -1409,7 +1558,5 @@ if (!CheckDebug()) {
 
   sendmail(from = from, to = to, subject = subject, msg = body)
 }
-
-print(msg)
 
 print("Imputation Completed Successfully")
