@@ -23,8 +23,148 @@
 imputeProductionTriplet = function(data,
                                   processingParameters,
                                   formulaParameters,
-                                  imputationParameters){
+                                  imputationParameters, ...){
+
     originDataType = sapply(data, FUN = typeof)
+
+    ################## ADDED TO HANDLE OUTLIERS
+
+    # List additional arguments
+    a <- list(...)
+
+    # TODO: Should be moved to R/
+    rollavg <- function(x, order = 3) {
+      # order should be > 2
+      stopifnot(order >= 3)
+      
+      non_missing <- sum(!is.na(x))
+      
+      # For cases that have just two non-missing observations
+      order <- ifelse(order > 2 & non_missing == 2, 2, order)
+      
+      if (non_missing == 1) {
+        x[is.na(x)] <- na.omit(x)[1]
+      } else if (non_missing >= order) {
+        n <- 1
+        while(any(is.na(x)) & n <= 10) { # 10 is max tries
+          movav <- suppressWarnings(RcppRoll::roll_mean(x, order, fill = 'extend', align = 'right'))
+          movav <- data.table::shift(movav)
+          x[is.na(x)] <- movav[is.na(x)]
+          n <- n + 1
+        }
+        
+        x <- zoo::na.fill(x, 'extend')
+      }
+      
+      return(x)
+    }
+
+    # function added in order to keep values in line
+    fix_out <- function(data,
+                        completeImputationKey,
+                        imputationTimeWindow,
+                        formula_parameters,
+                        imputation_parameters,
+                        flagValidTable,
+                        THRESHOLD,
+                        AVG_YEARS) {
+
+      orig_cols <- names(data)
+
+      mydata <- copy(data)
+
+      if (imputationTimeWindow == "all") {
+        val_years <- completeImputationKey@dimensions$timePointYears@keys
+      } else {
+        val_years <-
+          lastYear - 0:switch(imputationTimeWindow, "lastThree" = 2, "lastFive" = 4)
+      }
+
+      mydata <-
+        flagValidTable[
+          mydata,
+          on = c("flagObservationStatus" = formula_parameters$productionObservationFlag,
+                 "flagMethod" = formula_parameters$productionMethodFlag)
+        ]
+
+      setnames(
+        mydata,
+        c("flagObservationStatus", "flagMethod"),
+        c(formula_parameters$productionObservationFlag, formula_parameters$productionMethodFlag)
+      )
+
+      mydata[,
+        `:=`(
+          mean_old =
+            mean(
+              get(formula_parameters$productionValue)[
+                get(imputation_parameters$yearValue) %in% AVG_YEARS
+              ]
+            ),
+          mean_protected =
+            mean(
+              get(formula_parameters$productionValue)[
+                get(imputation_parameters$yearValue) %in% (max(AVG_YEARS) + 1):max(val_years) &
+                  sum(Protected[get(imputation_parameters$yearValue) %in% (max(AVG_YEARS) + 1):max(val_years)]) >= 2 &
+                  Protected == TRUE
+              ]
+            )
+        ),
+        by = c(imputation_parameters$byKey)
+      ]
+
+      mydata[is.nan(mean_old), mean_old := NA_real_]
+      mydata[is.nan(mean_protected), mean_protected := NA_real_]
+
+      # NOTE: some NA ratios are due to M- series
+      mydata[,
+        `:=`(
+          ratio_old       = get(formula_parameters$productionValue) / mean_old,
+          ratio_protected = get(formula_parameters$productionValue) / mean_protected
+        )
+      ]
+
+      mydata[is.infinite(ratio_old), ratio_old := NA_real_]
+      mydata[is.infinite(ratio_protected), ratio_protected := NA_real_]
+
+      mydata[, ratio := ifelse(!is.na(ratio_protected), ratio_protected, ratio_old)]
+
+      mydata[, outlier := FALSE]
+
+      mydata[
+        get(imputation_parameters$yearValue) %in% val_years &
+          Protected == FALSE,
+        outlier := abs(ratio - 1) > THRESHOLD
+      ]
+
+      mydata[
+        outlier == TRUE,
+        (formula_parameters$productionValue) := NA_real_
+      ]
+
+      mydata[,
+        movav :=
+          rollavg(
+            get(formula_parameters$productionValue),
+            order = 3
+          ),
+          by = c(imputation_parameters$byKey)
+      ]
+
+      mydata[
+        outlier == TRUE & !is.na(movav),
+        `:=`(
+          c(formula_parameters$productionValue,
+          formula_parameters$productionObservationFlag,
+          formula_parameters$productionMethodFlag),
+          # Flags are Ee to differentiate them from Ie
+          list(movav, "E", "e")
+        )
+      ]
+
+      return(mydata[, orig_cols, with = FALSE])
+    }
+    ################## / ADDED TO HANDLE OUTLIERS
 
     areaHarvestedImputationParameters = imputationParameters$areaHarvestedParams
     yieldImputationParameters = imputationParameters$yieldParams
@@ -75,8 +215,20 @@ imputeProductionTriplet = function(data,
         ##                     gsub(yieldValue, "yieldValue",
         ##                          deparse(yieldFormula))))
 
-        dataCopy =imputeVariable(data = dataCopy,
+        dataCopy = imputeVariable(data = dataCopy,
                        imputationParameters = yieldImputationParameters)
+
+        if (!is.null(a$FIX_OUTLIERS) && a$FIX_OUTLIERS == TRUE) {
+          dataCopy <- fix_out(data                  = dataCopy,
+                              completeImputationKey = a$completeImputationKey,
+                              imputationTimeWindow  = a$imputationTimeWindow,
+                              formula_parameters    = formulaParameters,
+                              imputation_parameters = yieldImputationParameters,
+                              flagValidTable        = a$flagValidTable,
+                              THRESHOLD             = a$THRESHOLD,
+                              AVG_YEARS             = a$AVG_YEARS)
+        }
+
         ## TODO (Michael): Remove imputed zero yield as yield can not be zero by
         ##                 definition. This probably should be handled in the
         ##                 imputation parameter.
@@ -114,6 +266,18 @@ imputeProductionTriplet = function(data,
 
         dataCopy = imputeVariable(data = dataCopy,
                        imputationParameters = productionImputationParameters)
+
+        if (!is.null(a$FIX_OUTLIERS) && a$FIX_OUTLIERS == TRUE) {
+          dataCopy <- fix_out(data                  = dataCopy,
+                              completeImputationKey = a$completeImputationKey,
+                              imputationTimeWindow  = a$imputationTimeWindow,
+                              formula_parameters    = formulaParameters,
+                              imputation_parameters = productionImputationParameters,
+                              flagValidTable        = a$flagValidTable,
+                              THRESHOLD             = a$THRESHOLD,
+                              AVG_YEARS             = a$AVG_YEARS)
+        }
+
         n.missProduction2 = length(which(is.na(
             dataCopy[[formulaParameters$productionValue]])))
         message("Number of values imputed: ",
@@ -148,8 +312,19 @@ imputeProductionTriplet = function(data,
         ##
         ##                 Issue #88
        
-         dataCopy = imputeVariable(data = dataCopy,
-                       imputationParameters = areaHarvestedImputationParameters)
+        dataCopy = imputeVariable(data = dataCopy,
+                      imputationParameters = areaHarvestedImputationParameters)
+
+        if (!is.null(a$FIX_OUTLIERS) && a$FIX_OUTLIERS == TRUE) {
+          dataCopy <- fix_out(data                  = dataCopy,
+                              completeImputationKey = a$completeImputationKey,
+                              imputationTimeWindow  = a$imputationTimeWindow,
+                              formula_parameters    = formulaParameters,
+                              imputation_parameters = areaHarvestedImputationParameters,
+                              flagValidTable        = a$flagValidTable,
+                              THRESHOLD             = a$THRESHOLD,
+                              AVG_YEARS             = a$AVG_YEARS)
+        }
         
     ## It was this part that caused the double "i" in methodFlag in the same triplet:
     ## beacuse I was deliting those non-protected yields even if I had used them to compute
@@ -170,7 +345,17 @@ imputeProductionTriplet = function(data,
                          formulaParameters = formulaParameters)
         dataCopy = imputeVariable(data = dataCopy,
                        imputationParameters = yieldImputationParameters)
-        
+
+        if (!is.null(a$FIX_OUTLIERS) && a$FIX_OUTLIERS == TRUE) {
+          dataCopy <- fix_out(data                  = dataCopy,
+                              completeImputationKey = a$completeImputationKey,
+                              imputationTimeWindow  = a$imputationTimeWindow,
+                              formula_parameters    = formulaParameters,
+                              imputation_parameters = yieldImputationParameters,
+                              flagValidTable        = a$flagValidTable,
+                              THRESHOLD             = a$THRESHOLD,
+                              AVG_YEARS             = a$AVG_YEARS)
+        }
        
     } ## End of HACK.
     n.missAreaHarvested2 =

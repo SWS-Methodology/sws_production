@@ -10,8 +10,11 @@
 #' 
 #' @export
 
-computeTotSlaughtered = function(data, FormulaParameters=animalFormulaParameters){
-    
+computeTotSlaughtered = function(data, FormulaParameters=animalFormulaParameters, ...){
+
+    # List additional arguments
+    a <- list(...)
+
     ## Data quality checks    
     ## 1) Check if the columns are all there
     ## 2) This function works only if data are dernormalized
@@ -64,10 +67,132 @@ computeTotSlaughtered = function(data, FormulaParameters=animalFormulaParameters
     takeOffImputed=removeNoInfo(takeOffImputed,"takeOffRate", "TakeOffFlagObservationStatus",
                                 byKey = c("geographicAreaM49", "measuredItemCPC" ))
     
+    # It was decided on November 2019 that the ensemble approach for the
+    # offtake rate should be killed, favouring the average of previous
+    # five years. The previous code is commented with #@#
+
+    takeOffImputed[,
+      movav :=
+        rollavg(
+          get(takeOffImputationParamenters$imputationValueColumn),
+          order = 3
+        ),
+        by = c(takeOffImputationParamenters$byKey)
+    ]
+
+    takeOffImputed[
+      is.na(takeOffRate) & !is.na(movav),
+      `:=`(
+        c("takeOffRate",
+        takeOffImputationParamenters$imputationFlagColumn,
+        takeOffImputationParamenters$imputationMethodColumn),
+        # Flags are Ee to differentiate them from Ie
+        list(movav, "E", "e")
+      )
+    ]
+
+    takeOffImputed[, movav := NULL]
     
-    takeOffImputed=imputeVariable(takeOffImputed,
-                                  imputationParameters=takeOffImputationParamenters)
-    
+    #@# takeOffImputed <-
+    #@#   imputeVariable(
+    #@#     takeOffImputed,
+    #@#     imputationParameters = takeOffImputationParamenters
+    #@#   )
+    #@# 
+    #@# if (!is.null(a$FIX_OUTLIERS) && a$FIX_OUTLIERS == TRUE) {
+
+    #@#   orig_cols <- names(takeOffImputed)
+
+    #@#   if (a$imputationTimeWindow == "all") {
+    #@#     val_years <- a$completeImputationKey@dimensions$timePointYears@keys
+    #@#   } else {
+    #@#     val_years <-
+    #@#       lastYear - 0:switch(a$imputationTimeWindow, "lastThree" = 2, "lastFive" = 4)
+    #@#   }
+
+    #@#   # These will be used as Protected = FALSE.
+    #@#   # TODO: parameterise
+    #@#   checkOut <-
+    #@#     data[
+    #@#       timePointYears %in% val_years & is.na(Value_measuredElement_5315),
+    #@#       .(geographicAreaM49, measuredItemCPC, timePointYears, Protected = FALSE)
+    #@#     ]
+
+    #@#   takeOffImputed <-
+    #@#     merge(
+    #@#       takeOffImputed,
+    #@#       checkOut,
+    #@#       by = c("geographicAreaM49", "measuredItemCPC", "timePointYears"),
+    #@#       all.x = TRUE
+    #@#     )
+
+    #@#   takeOffImputed[is.na(Protected), Protected := TRUE]
+
+    #@#   takeOffImputed[,
+    #@#     `:=`(
+    #@#       mean_old =
+    #@#         mean(
+    #@#           get(takeOffImputationParamenters$imputationValueColumn)[
+    #@#             get(takeOffImputationParamenters$yearValue) %in% a$AVG_YEARS
+    #@#           ]
+    #@#         )
+    #@#     ),
+    #@#     by = c(takeOffImputationParamenters$byKey)
+    #@#   ]
+
+    #@#   takeOffImputed[is.nan(mean_old), mean_old := NA_real_]
+
+    #@#   # NOTE: some NA ratios are due to M- series
+    #@#   takeOffImputed[,
+    #@#     `:=`(
+    #@#       ratio = get(takeOffImputationParamenters$imputationValueColumn) / mean_old
+    #@#     )
+    #@#   ]
+
+    #@#   takeOffImputed[is.infinite(ratio), ratio := NA_real_]
+
+    #@#   takeOffImputed[, outlier := FALSE]
+
+    #@#   takeOffImputed[
+    #@#     get(takeOffImputationParamenters$yearValue) %in% val_years &
+    #@#       Protected == FALSE,
+    #@#     outlier := abs(ratio - 1) > a$THRESHOLD
+    #@#   ]
+
+    #@#   takeOffImputed[
+    #@#     outlier == TRUE,
+    #@#     (takeOffImputationParamenters$imputationValueColumn) := NA_real_
+    #@#   ]
+
+    #@#   takeOffImputed[,
+    #@#     movav :=
+    #@#       rollavg(
+    #@#         get(takeOffImputationParamenters$imputationValueColumn),
+    #@#         order = 3
+    #@#       ),
+    #@#       by = c(takeOffImputationParamenters$byKey)
+    #@#   ]
+
+    #@#   takeOffImputed[
+    #@#     outlier == TRUE & !is.na(movav),
+    #@#     `:=`(
+    #@#       c(takeOffImputationParamenters$imputationValueColumn,
+    #@#       takeOffImputationParamenters$imputationFlagColumn,
+    #@#       takeOffImputationParamenters$imputationMethodColumn),
+    #@#       # Flags are Ee to differentiate them from Ie
+    #@#       list(movav, "E", "e")
+    #@#     )
+    #@#   ]
+
+    #@#   # Keep these to change flags later
+    #@#   takeOff_outliers <-
+    #@#     takeOffImputed[
+    #@#       TakeOffFlagObservationStatus == "E" & TakeOffRateFlagMethod == "e",
+    #@#       .(geographicAreaM49, measuredItemCPC, timePointYears, takeOffOut = TRUE)
+    #@#     ]
+
+    #@#   takeOffImputed <- takeOffImputed[, orig_cols, with = FALSE]
+    #@# }
     
     data[,takeOffRate:=NULL]
     data[,TakeOffFlagObservationStatus:=NULL]
@@ -91,11 +216,31 @@ computeTotSlaughtered = function(data, FormulaParameters=animalFormulaParameters
     
     ##OverWrite the newSlaughter into the missing value of the slaughterd column:
     ##Be careful to not overwrite slaugheter that were (M,-)
-    takeOffImputed[is.na(get(animalFormulaParameters$areaHarvestedValue)) &
-                       !is.na(newSlaughtered)&
-                       get(animalFormulaParameters$areaHarvestedMethodFlag)!="-",
-                   animalFormulaParameters$areaHarvestedObservationFlag:="I"]
+    takeOffImputed[
+      is.na(get(animalFormulaParameters$areaHarvestedValue)) &
+        !is.na(newSlaughtered) &
+        get(animalFormulaParameters$areaHarvestedMethodFlag) != "-",
+      animalFormulaParameters$areaHarvestedObservationFlag := "I"
+    ]
     
+    #@# if (!is.null(a$FIX_OUTLIERS) && a$FIX_OUTLIERS == TRUE) {
+    #@#   if (nrow(takeOff_outliers) > 0) {
+    #@#     takeOffImputed <-
+    #@#       merge(
+    #@#         takeOffImputed,
+    #@#         takeOff_outliers,
+    #@#         by = c("geographicAreaM49", "measuredItemCPC", "timePointYears"),
+    #@#         all.x = TRUE
+    #@#       )
+
+    #@#     takeOffImputed[
+    #@#       takeOffOut == TRUE,
+    #@#       animalFormulaParameters$areaHarvestedObservationFlag := "E"
+    #@#     ]
+
+    #@#     takeOffImputed[, takeOffOut := NULL]
+    #@#   }
+    #@# }
     
     takeOffImputed[is.na(get(animalFormulaParameters$areaHarvestedValue)) &
                        !is.na(newSlaughtered)&
