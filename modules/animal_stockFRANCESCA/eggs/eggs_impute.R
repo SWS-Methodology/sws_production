@@ -65,6 +65,8 @@ sessionKey = swsContext.datasets[[1]]
 datasetConfig = GetDatasetConfig(domainCode = sessionKey@domain,
                                  datasetCode = sessionKey@dataset)
 
+imputationTimeWindow = swsContext.computationParams$imputation_timeWindow
+
 if (!imputationTimeWindow %in% c("all", "lastThree")) {
   stop("Incorrect imputation selection specified")
 }
