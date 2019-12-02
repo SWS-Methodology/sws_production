@@ -67,7 +67,7 @@ datasetConfig = GetDatasetConfig(domainCode = sessionKey@domain,
 
 imputationTimeWindow = swsContext.computationParams$imputation_timeWindow
 
-if (!imputationTimeWindow %in% c("all", "lastThree")) {
+if (!imputationTimeWindow %in% c("all", "lastThree", "lastFive")) {
   stop("Incorrect imputation selection specified")
 }
 
@@ -143,8 +143,10 @@ eggsAnimalData <-
 
 if (imputationTimeWindow == "all") {
   eggsAnimalData = removeNonProtectedFlag(eggsAnimalData)
-} else {
+} else if (imputationTimeWindow == "lastThree") {
   eggsAnimalData = removeNonProtectedFlag(eggsAnimalData, keepDataUntil = (lastYear-2))
+} else if (imputationTimeWindow == "lastFive") {
+  eggsAnimalData = removeNonProtectedFlag(eggsAnimalData, keepDataUntil = (lastYear-4))
 }
 
 ## Pull numbers
@@ -159,8 +161,10 @@ eggsNumbersData <-
 
 if (imputationTimeWindow == "all") {
   eggsNumbersData = removeNonProtectedFlag(eggsNumbersData)
-} else {
+} else if (imputationTimeWindow == "lastThree") {
   eggsNumbersData = removeNonProtectedFlag(eggsNumbersData, keepDataUntil = (lastYear-2))
+} else if (imputationTimeWindow == "lastFive") {
+  eggsNumbersData = removeNonProtectedFlag(eggsNumbersData, keepDataUntil = (lastYear-4))
 }
 
 
@@ -269,8 +273,10 @@ existingSeries = unique(eggsProductionData[, .(geographicAreaM49, measuredItemCP
 
 if (imputationTimeWindow == "all") {
   eggsProductionData = removeNonProtectedFlag(eggsProductionData)
-} else {
+} else if (imputationTimeWindow == "lastThree") {
   eggsProductionData = removeNonProtectedFlag(eggsProductionData, keepDataUntil = (lastYear-2))
+} else if (imputationTimeWindow == "lastFive") {
+  eggsProductionData = removeNonProtectedFlag(eggsProductionData, keepDataUntil = (lastYear-4))
 }
 
 #eggsProductionData = removeNonProtectedFlag(eggsProductionData)
@@ -364,8 +370,10 @@ eggsYieldProductionData = GetData(completeImputationKey)
 
 if (imputationTimeWindow == "all") {
   eggsYieldProductionData = removeNonProtectedFlag(eggsYieldProductionData)
-} else {
+} else if (imputationTimeWindow == "lastThree") {
   eggsYieldProductionData = removeNonProtectedFlag(eggsYieldProductionData, keepDataUntil = (lastYear-2))
+} else if (imputationTimeWindow == "lastFive") {
+  eggsYieldProductionData = removeNonProtectedFlag(eggsYieldProductionData, keepDataUntil = (lastYear-4))
 }
 
 #eggsYieldProductionData = removeNonProtectedFlag(eggsYieldProductionData)
@@ -512,17 +520,15 @@ completeTriplet <-
 
 
 if (imputationTimeWindow == "lastThree") {
-  completeTriplet = completeTriplet[timePointYears %in% c(lastYear, lastYear-1, lastYear-2)]
-
-  SaveData(domain = sessionKey@domain, 
-           dataset = sessionKey@dataset,
-           data = completeTriplet) 
- 
-} else {
-  SaveData(domain = sessionKey@domain, 
-           dataset = sessionKey@dataset,
-           data = completeTriplet)
+  completeTriplet = completeTriplet[timePointYears %in% (lastYear - 0:2)]
+} else if (imputationTimeWindow == "lastFive") {
+  completeTriplet = completeTriplet[timePointYears %in% (lastYear - 0:4)]
 }
+
+SaveData(domain = sessionKey@domain, 
+         dataset = sessionKey@dataset,
+         data = completeTriplet) 
+ 
 
 if (!CheckDebug()) {
     ## Initiate email
