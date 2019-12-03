@@ -5,7 +5,8 @@
 ##' 
 ##' **Description:**
 ##'
-##' This module is designed to identify and automatically correct the outliers in the production module.
+##' This module is designed to identify and automatically correct the outliers in the production environement.
+##' It can detect any triplets (so called productivity, input and output) in Crop or Livestock.
 ##'
 
 
@@ -49,8 +50,8 @@ if(CheckDebug()){
     
 }
 
-
-#No need now: offtake rates are now calculated
+# Off-take rates are written on ..... 
+# No need now: offtake rates are now calculated
 dir_to_save <- file.path(R_SWS_SHARE_PATH, "Livestock",paste0("validationFAODOMAIN_rosa"))
 # if(!file.exists(dir_to_save)){
 #     dir.create(dir_to_save, recursive = TRUE)
@@ -65,7 +66,7 @@ imputationTimeWindow = swsContext.computationParams$imputation_timeWindow
 if(!imputationTimeWindow %in% c("all", "lastThree"))
     stop("Incorrect imputation selection specified")
 
-##' Get data configuration and session
+# Get data configuration and session
 sessionKey = swsContext.datasets[[1]]
 datasetConfig = GetDatasetConfig(domainCode = sessionKey@domain,
                                  datasetCode = sessionKey@dataset)
@@ -121,25 +122,25 @@ datasetConfig = GetDatasetConfig(domainCode = sessionKey@domain,
 ##'
 ##' The elements are also expanded to the required triplet.
 
-livestockImputationItems =
-    completeImputationKey %>%
-    expandMeatSessionSelection(oldKey = .,
-                               selectedMeatTable = animalMeatMappingTable) %>%
-    getQueryKey("measuredItemCPC", datasetkey = .) %>%
-    selectMeatCodes(itemCodes = .)
-
-sessionItems =
-    sessionKey %>%
-    expandMeatSessionSelection(oldKey = .,
-                               selectedMeatTable = animalMeatMappingTable) %>%
-    getQueryKey("measuredItemCPC", datasetkey = .) %>%
-    selectMeatCodes(itemCodes = .)
-
-##' Select the range of items based on the computational parameter.
-selectedMeatCode =
-    switch(imputationSelection,
-           session = sessionItems,
-           all = livestockImputationItems)
+# livestockImputationItems =
+#     completeImputationKey %>%
+#     expandMeatSessionSelection(oldKey = .,
+#                                selectedMeatTable = animalMeatMappingTable) %>%
+#     getQueryKey("measuredItemCPC", datasetkey = .) %>%
+#     selectMeatCodes(itemCodes = .)
+# 
+# sessionItems =
+#     sessionKey %>%
+#     expandMeatSessionSelection(oldKey = .,
+#                                selectedMeatTable = animalMeatMappingTable) %>%
+#     getQueryKey("measuredItemCPC", datasetkey = .) %>%
+#     selectMeatCodes(itemCodes = .)
+# 
+# ##' Select the range of items based on the computational parameter.
+# selectedMeatCode =
+#     switch(imputationSelection,
+#            session = sessionItems,
+#            all = livestockImputationItems)
 
 
 
@@ -364,6 +365,16 @@ data <- merge(
 )
 
 data[is.na(Protected),Protected:=FALSE]
+data[flagObservationStatus=="E" & flagMethod=="e",Protected:=FALSE]
+data[,EF:=ifelse(flagObservationStatus=="E" & flagMethod=="e",TRUE,FALSE)]
+
+data_ef<-data[,list(geographicAreaM49,timePointYears,
+                    measuredElement,measuredItemCPC,EF)]
+
+
+# data[,EF:=NULL]
+
+
 # data <- merge(data, data_offtake, by = c("geographicAreaM49", "timePointYears", "measuredItemCPC", "flagObservationStatus", "flagMethod"), all.x = TRUE)
 #complete triplet
 
@@ -508,7 +519,7 @@ update_slaughter<-function(data, mappingData,sendTo,from="parent"){
                                  element1,
                                  item1,
                                  "Value","flagObservationStatus","flagMethod",
-                                 "Valid","Protected"),with=FALSE
+                                 "Valid","Protected","EF"),with=FALSE
                            ]
     setnames(datamerged,c(item1),c("measuredItemCPC"))
     setnames(datamerged,c(element1),"measuredElement")
@@ -536,7 +547,7 @@ Label_outlier<-function(data=data, element, type){
   
   data[,proCondition:=ifelse(timePointYears %in% yearVals & get(Protected)==TRUE,TRUE,FALSE)]
   
-  data[,meanCondition:=ifelse(timeCondition==TRUE & proCondition==TRUE,TRUE,FALSE)]
+  data[,meanCondition:=ifelse(timeCondition==TRUE | proCondition==TRUE,TRUE,FALSE)]
   
   
   data[,
@@ -647,7 +658,7 @@ correctInputOutput<-function(data=data,
   data_triplet<-data_triplet[measuredItemCPC %in% inteminput]
   
   
-  data_triplet<- dcast.data.table(data_triplet, geographicAreaM49 + measuredItemCPC + timePointYears ~ measuredElement, value.var = list('Value', 'Protected'))
+  data_triplet<- dcast.data.table(data_triplet, geographicAreaM49 + measuredItemCPC + timePointYears ~ measuredElement, value.var = list('Value', 'Protected','EF'))
   
   
   Label_outlier(data=data_triplet,element=triplet$output,type="output")
@@ -664,6 +675,13 @@ correctInputOutput<-function(data=data,
   output<-paste0("Value_",triplet$output)
   productivity<-paste0("Value_",triplet$productivity)
   
+  ef_input<-paste0("EF_",triplet$input)
+  ef_output<-paste0("EF_",triplet$output)
+  ef_productivity<-paste0("EF_",triplet$productivity)
+  
+  data_triplet[get(ef_input)==TRUE,isOutlier_input:=TRUE]
+  data_triplet[get(ef_output)==TRUE,isOutlier_output:=TRUE]
+  data_triplet[get(ef_productivity)==TRUE,isOutlier_productivity:=TRUE]
   
   data_triplet[isOutlier_productivity==TRUE,c(productivity):=movav_productivity]
   
@@ -743,9 +761,10 @@ correctInputOutput<-function(data=data,
   
   data[measuredElement %in% triplet$productivity & Protected==FALSE & !is.na(value_new) & round(value_new,6)!=round(Value,6) &
            timePointYears %in% yearVals ,`:=`(Value=value_new,
-                                              flagObservationStatus=ifelse(isOutlier_productivity==TRUE,"E",flagObservationStatus
+                                              flagObservationStatus=ifelse(flagObservationStatus %in% c("I","E"),"E",flagObservationStatus
                                                                            ),
-                                              flagMethod=ifelse(isOutlier_productivity==TRUE,"i",flagMethod))]
+                                              flagMethod="i"
+                                              )]
   
   # data[measuredElement %in% triplet$productivity & Protected==FALSE & !is.na(value_new) & round(value_new,6)!=round(Value,6) &
   #          timePointYears %in% yearVals ,Value:=value_new]
@@ -786,7 +805,7 @@ data<-correctInputOutput(data,triplet = livestock_triplet_lst_2bis,partial = FAL
 
 data<-update_slaughter(data=data,mappingData = mapping,sendTo = "parent",from = "child")
 
-data<-correctInputOutput(data,triplet = livestock_triplet_lst_1,partial = FALSE)
+data<-correctInputOutput(data,triplet = livestock_triplet_lst_1bis,partial = FALSE)
 
 
 dataf<-data[measuredElement!="9999"]
@@ -802,7 +821,6 @@ SaveData(domain = datasetConfig$domain,
 #productivity outliers after update
 
 productivityVector<-c("5421",
-                      "9999",
                       "5316",
                       "5424",
                       "5417")
@@ -825,4 +843,4 @@ data_outlier<-data_element[is_outlier==TRUE & timePointYears %in% yearVals]
 
 data_outlier<-nameData(datasetConfig$domain,datasetConfig$dataset,data_outlier)
 
-write.csv(data_outlier,"Outliers.csv")
+write.csv(data_outlier,"Productivity_Outliers.csv")
