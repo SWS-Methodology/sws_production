@@ -67,7 +67,7 @@ datasetConfig = GetDatasetConfig(domainCode = sessionKey@domain,
 
 imputationTimeWindow = swsContext.computationParams$imputation_timeWindow
 
-if (!imputationTimeWindow %in% c("all", "lastThree")) {
+if (!imputationTimeWindow %in% c("all", "lastThree", "lastFive")) {
   stop("Incorrect imputation selection specified")
 }
 
@@ -143,8 +143,10 @@ eggsAnimalData <-
 
 if (imputationTimeWindow == "all") {
   eggsAnimalData = removeNonProtectedFlag(eggsAnimalData)
-} else {
+} else if (imputationTimeWindow == "lastThree") {
   eggsAnimalData = removeNonProtectedFlag(eggsAnimalData, keepDataUntil = (lastYear-2))
+} else if (imputationTimeWindow == "lastFive") {
+  eggsAnimalData = removeNonProtectedFlag(eggsAnimalData, keepDataUntil = (lastYear-4))
 }
 
 ## Pull numbers
@@ -159,8 +161,10 @@ eggsNumbersData <-
 
 if (imputationTimeWindow == "all") {
   eggsNumbersData = removeNonProtectedFlag(eggsNumbersData)
-} else {
+} else if (imputationTimeWindow == "lastThree") {
   eggsNumbersData = removeNonProtectedFlag(eggsNumbersData, keepDataUntil = (lastYear-2))
+} else if (imputationTimeWindow == "lastFive") {
+  eggsNumbersData = removeNonProtectedFlag(eggsNumbersData, keepDataUntil = (lastYear-4))
 }
 
 
@@ -269,8 +273,10 @@ existingSeries = unique(eggsProductionData[, .(geographicAreaM49, measuredItemCP
 
 if (imputationTimeWindow == "all") {
   eggsProductionData = removeNonProtectedFlag(eggsProductionData)
-} else {
+} else if (imputationTimeWindow == "lastThree") {
   eggsProductionData = removeNonProtectedFlag(eggsProductionData, keepDataUntil = (lastYear-2))
+} else if (imputationTimeWindow == "lastFive") {
+  eggsProductionData = removeNonProtectedFlag(eggsProductionData, keepDataUntil = (lastYear-4))
 }
 
 #eggsProductionData = removeNonProtectedFlag(eggsProductionData)
@@ -284,25 +290,19 @@ eggsProductionDataToModel <-
 # to calculate production based on a table with conversion factors
 
 
-# XXX: use SWS datatable
-eggs_conversion_factors <-
-  ReadDatatable('eggs_conversion_factors') %>%
-  data.table::melt(
-    id = c('year', 'm49', 'name', 'comments', 'responsible')
-  ) %>%
-  tidyr::separate(
-    variable,
-    into = c('variable', 'measuredItemCPC')
-  ) %>%
-  dplyr::filter(variable == "weight") %>%
-  dplyr::select(timePointYears = year, geographicAreaM49 = m49, measuredItemCPC, avg_weight = value) %>%
-  setDT()
+eggs_conversion_factors <- ReadDatatable("eggs_technical_conversion_factors")
 
+stopifnot(nrow(eggs_conversion_factors) > 0)
+
+eggs_conversion_factors <-
+  eggs_conversion_factors[,
+    .(geographicAreaM49 = m49, measuredItemCPC = item, avg_weight)
+  ]
 
 eggsProductionDataToModel <-
   eggs_conversion_factors[
     eggsProductionDataToModel,
-    on = c('geographicAreaM49', 'timePointYears', 'measuredItemCPC')
+    on = c('geographicAreaM49', 'measuredItemCPC')
   ][,
     # {(5513 * 1000) * [avg_weight / 1000]} / 1000
     # () = numbers, [] = kilos per number, {} = kilos
@@ -370,8 +370,10 @@ eggsYieldProductionData = GetData(completeImputationKey)
 
 if (imputationTimeWindow == "all") {
   eggsYieldProductionData = removeNonProtectedFlag(eggsYieldProductionData)
-} else {
+} else if (imputationTimeWindow == "lastThree") {
   eggsYieldProductionData = removeNonProtectedFlag(eggsYieldProductionData, keepDataUntil = (lastYear-2))
+} else if (imputationTimeWindow == "lastFive") {
+  eggsYieldProductionData = removeNonProtectedFlag(eggsYieldProductionData, keepDataUntil = (lastYear-4))
 }
 
 #eggsYieldProductionData = removeNonProtectedFlag(eggsYieldProductionData)
@@ -453,11 +455,9 @@ completeTriplet[
 
 # Estimation of missing numbers
 completeTriplet <-
-  eggs_conversion_factors[,
-    timePointYears := as.character(timePointYears)
-  ][
+  eggs_conversion_factors[
     completeTriplet,
-    on = c('geographicAreaM49', 'timePointYears', 'measuredItemCPC')
+    on = c('geographicAreaM49', 'measuredItemCPC')
   ]
 
 numbersToBeEstimated <-
@@ -520,17 +520,15 @@ completeTriplet <-
 
 
 if (imputationTimeWindow == "lastThree") {
-  completeTriplet = completeTriplet[timePointYears %in% c(lastYear, lastYear-1, lastYear-2)]
-
-  SaveData(domain = sessionKey@domain, 
-           dataset = sessionKey@dataset,
-           data = completeTriplet) 
- 
-} else {
-  SaveData(domain = sessionKey@domain, 
-           dataset = sessionKey@dataset,
-           data = completeTriplet)
+  completeTriplet = completeTriplet[timePointYears %in% (lastYear - 0:2)]
+} else if (imputationTimeWindow == "lastFive") {
+  completeTriplet = completeTriplet[timePointYears %in% (lastYear - 0:4)]
 }
+
+SaveData(domain = sessionKey@domain, 
+         dataset = sessionKey@dataset,
+         data = completeTriplet) 
+ 
 
 if (!CheckDebug()) {
     ## Initiate email
