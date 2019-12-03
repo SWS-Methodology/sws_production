@@ -704,11 +704,11 @@ correctInputOutput<-function(data=data,
 # data<-correctInputOutput(data,triplet = crop_triplet_lst,partial = FALSE)
 # 
 # #livestocks type 1: stocks in head
-data<-correctInputOutput(data,triplet = milk_triplet_lst_1,partial = TRUE)
+data<-correctInputOutput(data,triplet = milk_triplet_lst_1)
 # 
 #data<-update_slaughter(data=data,mappingData = mapping,sendTo = "child",from = "parent") ### CHECK THIS
 # 
-data<-correctInputOutput(data,triplet = milk_triplet_lst_2,partial = FALSE,factor = 1000)
+data<-correctInputOutput(data,triplet = milk_triplet_lst_2,factor = 1000)
 
 #data<-update_slaughter(data=data,mappingData = mapping,sendTo = "parent",from = "child")  ### CHECK THIS
 
@@ -732,7 +732,11 @@ data<-correctInputOutput(data,triplet = milk_triplet_lst_2,partial = FALSE,facto
 # data<-correctInputOutput(data,triplet = milk_triplet_lst_1,partial = FALSE)
 
 
-dataf <- data[measuredElement!="9999"]
+
+dataf <- data[(measuredElement %!in% c("5318")) & (measuredItemCPC %!in% mapping[,get("measuredItemAnimalCPC")])]
+
+dataf <- data[measuredElement %!in% c("9999","5111")]
+
 dataf <- dataf[!is.na(Value)]
 
 dataf <- dataf[timePointYears %in% yearVals,c(names(animalData)), with=FALSE]
@@ -763,4 +767,4 @@ data_outlier <- data_element[is_outlier==TRUE & timePointYears %in% yearVals]
 
 data_outlier <- nameData(datasetConfig$domain,datasetConfig$dataset,data_outlier)
 
-write.csv(data_outlier,"Outliers.csv")
+write.csv(data_outlier,"OutliersMilk.csv")
