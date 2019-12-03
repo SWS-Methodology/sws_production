@@ -33,7 +33,7 @@ R_SWS_SHARE_PATH = Sys.getenv("R_SWS_SHARE_PATH")
 if(CheckDebug()){
     
     library(faoswsModules)
-    SETTINGS = ReadSettings("C:/Users/Selek/Dropbox/1-FAO-DROPBOX/faoswsProduction/modules/outlierDetectionProd/sws.yml")
+    SETTINGS = ReadSettings(file.path(getwd(),"modules","outlierDetectionProd","sws.yml"))
     
     ## If you're not on the system, your settings will overwrite any others
     R_SWS_SHARE_PATH = SETTINGS[["share"]]
@@ -68,71 +68,6 @@ sessionKey = swsContext.datasets[[1]]
 datasetConfig = GetDatasetConfig(domainCode = sessionKey@domain,
                                  datasetCode = sessionKey@dataset)
 
-# ##' Build processing parameters
-# processingParameters =
-#     productionProcessingParameters(datasetConfig = datasetConfig)
-
-
-
-# lastYear=max(as.numeric(swsContext.computationParams$last_year))
-
-##' Obtain the complete imputation key
-# completeImputationKey = getCompleteImputationKey("production")
-
-# completeImputationKey@dimensions$timePointYears@keys <-
-# as.character(min(completeImputationKey@dimensions$timePointYears@keys):lastYear)
-
-
-
-##' Extract the animal parent to child commodity mapping table
-##'
-##' This table contains the parent item/element code which maps to the child
-##' item/element code. For example, the slaughtered animal element for cattle is
-##' 5315, while the slaughtered animal for cattle meat is 5320.
-##'
-##  Ideally, the two elements should be merged and have a single
-##  code in the classification. This will eliminate the change of
-##  code in the transfer procedure.
-
-# animalMeatMappingTable = ReadDatatable("animal_parent_child_mapping")
-#animalMilkCorr = ReadDatatable('animal_milk_correspondence')
-# ##When pulled from the SWS the datatable header cannot contain capital letters
-#setnames(animalMilkCorr,c("animal_item_cpc", "milk_item_cpc"), c("measuredItemAnimalCPC", "measuredItemMilkCPC"))
-
-# animalMeatMappingTable= animalMeatMappingTable[,.(measuredItemParentCPC, measuredElementParent,
-#                                                   measuredItemChildCPC, measuredElementChild)]
-
-##' Here we expand the session to include all the parent and child items. That
-##' is, we expand to the particular livestock tree.
-##'
-##' For example, if 02111 (Cattle) is in the session, then the session will be
-##' expanded to also include 21111.01 (meat of cattle, freshor chilled), 21151
-##' (edible offal of cattle, fresh, chilled or frozen), 21512 (cattle fat,
-##' unrendered), and 02951.01 (raw hides and skins of cattle).
-##'
-##' The elements are also expanded to the required triplet.
-# 
-# livestockImputationItems =
-#     completeImputationKey %>%
-#     expandMeatSessionSelection(oldKey = .,
-#                                selectedMeatTable = animalMeatMappingTable) %>%
-#     getQueryKey("measuredItemCPC", datasetkey = .) %>%
-#     selectMeatCodes(itemCodes = .)
-# 
-# sessionItems =
-#     sessionKey %>%
-#     expandMeatSessionSelection(oldKey = .,
-#                                selectedMeatTable = animalMeatMappingTable) %>%
-#     getQueryKey("measuredItemCPC", datasetkey = .) %>%
-#     selectMeatCodes(itemCodes = .)
-# 
-# ##' Select the range of items based on the computational parameter.
-# selectedMeatCode =
-#     switch(imputationSelection,
-#            session = sessionItems,
-#            all = livestockImputationItems)
-# 
-# 
 
 ## Get the animal data (NB: preProcessing: manage NA M and transform timePointYears)
 ## Get the MILK data (NB: preProcessing: manage NA M and transform timePointYears)
@@ -200,15 +135,18 @@ interval <- (startYear-window):(startYear-1)
 # Read the data needed
 flagValidTable <- ReadDatatable("valid_flags")
 
-data1 <- data[measuredItemCPC %in% c('02211', '02212', '02291', '02292', '02293') & measuredElement == '5318',]
+# data1 <- data[measuredItemCPC %in% c('02211', '02212', '02291', '02292', '02293') & measuredElement == '5318',]
 mapping <- ReadDatatable('animal_milk_correspondence')
 setnames(mapping,c("animal_item_cpc", "milk_item_cpc"), c("measuredItemAnimalCPC", "measuredItemCPC"))
 
-data2 <- merge(data1, mapping, by='measuredItemCPC')
+data2 <- merge(data[measuredElement == '5318'], mapping, by='measuredItemCPC')
 data2[, measuredItemCPC:= NULL]
 setnames(data2,"measuredItemAnimalCPC", "measuredItemCPC")
 
-data<-rbind(data,data2)
+data2<-data2[,colnames(data),with=FALSE]
+
+data<-rbind(data,data2[!data,on=c("geographicAreaM49","timePointYears",
+                                  "measuredElement","measuredItemCPC")])
 
 #the FBS tree is used to map only meat items but not offals and fats
 # message("Download fbsTree from SWS...")
@@ -273,7 +211,7 @@ data<-rbind(data,data2)
 dataEstYield <-data[measuredElement %in% c("5111","5318")]
 
 dataEstYield <- dcast.data.table(dataEstYield, geographicAreaM49 + measuredItemCPC + timePointYears ~ measuredElement, value.var = list('Value'))
-dataEstYield[,Value:=`5111`/`5318`]
+dataEstYield[,Value:=`5318`/`5111`]
 dataEstYield[,`5111`:=NULL]
 dataEstYield[,`5318`:=NULL]
 dataEstYield[,measuredElement:=9999]
@@ -544,7 +482,7 @@ Label_outlier<-function(data=data, element, type){
     
     data[,proCondition:=ifelse(timePointYears %in% yearVals & get(Protected)==TRUE,TRUE,FALSE)]
     
-    data[,meanCondition:=ifelse(timeCondition==TRUE & proCondition==TRUE,TRUE,FALSE)]
+    data[,meanCondition:=ifelse(timeCondition==TRUE | proCondition==TRUE,TRUE,FALSE)]
     
     
     data[,
@@ -637,7 +575,6 @@ compute_movav<-function(data=data_crop,element="5510",type="output") {
 
 correctInputOutput<-function(data=data,
                              triplet=milk_triplet_lst_1,
-                             partial=FALSE,
                              factor=1
 ) {
     
@@ -678,21 +615,21 @@ correctInputOutput<-function(data=data,
     # data_triplet[isOutlier_input==TRUE & isOutlier_output==FALSE,c(input):=ifelse(get(productivity)!=0,get(output)/get(productivity)*factor,NA)]
     # data_triplet[isOutlier_input==TRUE & isOutlier_output==FALSE,isOutlier_input:=FALSE]
     
-    data_triplet[isOutlier_input==FALSE & isOutlier_output==TRUE,
+    data_triplet[isOutlier_output==TRUE,
                  c(output):=get(input)*get(productivity)/factor]
     
-    data_triplet[isOutlier_input==FALSE & isOutlier_output==TRUE,
-                 isOutlier_output:=TRUE]
+    data_triplet[isOutlier_output==TRUE,
+                 isOutlier_output:=FALSE]
     
-    if (partial==FALSE) {
+    
         
-        data_triplet[isOutlier_input==TRUE & isOutlier_output==TRUE,
-                     c(output):=movav_output]
-        data_triplet[isOutlier_input==TRUE & isOutlier_output==TRUE,
-                     c(input):=movav_output/get(productivity)*factor]
-        
-        data_triplet[isOutlier_input==TRUE & isOutlier_output==TRUE,
-                     `:=`(isOutlier_input=FALSE,isOutlier_output=FALSE)]
+        # data_triplet[isOutlier_input==TRUE & isOutlier_output==TRUE,
+        #              c(output):=movav_output]
+        # data_triplet[isOutlier_input==TRUE & isOutlier_output==TRUE,
+        #              c(input):=movav_output/get(productivity)*factor]
+        # 
+        # data_triplet[isOutlier_input==TRUE & isOutlier_output==TRUE,
+        #              `:=`(isOutlier_input=FALSE,isOutlier_output=FALSE)]
         
         #update the productivity
         data_triplet[,c(productivity):=get(output)/get(input)*factor]
@@ -701,9 +638,7 @@ correctInputOutput<-function(data=data,
         data_triplet[is.na(get(output)),c(productivity):=0]
         
         
-        
-        
-    }
+    
     
     
     #Putting the data in the initial format
