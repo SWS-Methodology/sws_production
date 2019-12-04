@@ -9,7 +9,7 @@
 ##' It can detect any triplets (so called productivity, input and output) in Crop or Livestock.
 ##'
 
-
+message("test1")
 
 # Import libraries
 suppressMessages({
@@ -366,10 +366,15 @@ data <- merge(
 
 data[is.na(Protected),Protected:=FALSE]
 data[flagObservationStatus=="E" & flagMethod=="e",Protected:=FALSE]
+data[flagObservationStatus=="T" & flagMethod=="q",Protected:=FALSE]
+
 data[,EF:=ifelse(flagObservationStatus=="E" & flagMethod=="e",TRUE,FALSE)]
 
 data_ef<-data[,list(geographicAreaM49,timePointYears,
                     measuredElement,measuredItemCPC,EF)]
+
+# data[flagObservationStatus=="M",Value:=NA_real_]
+
 
 
 # data[,EF:=NULL]
@@ -648,6 +653,7 @@ correctInputOutput<-function(data=data,
     
     
   # data_triplet<-copy(data)
+    data[flagObservationStatus=="M",Value:=NA_real_]
     
   data_triplet <- data[measuredElement %in% triplet]
     
@@ -692,7 +698,7 @@ correctInputOutput<-function(data=data,
        c(output):=get(input)*get(productivity)/factor]
   
   data_triplet[isOutlier_input==FALSE & isOutlier_output==TRUE,
-       isOutlier_output:=TRUE]
+       isOutlier_output:=FALSE]
   
   if (partial==FALSE) {
       
@@ -745,7 +751,11 @@ correctInputOutput<-function(data=data,
   )
   
   
+  
+  
   data[,difference:=value_new-Value]
+  
+  data[flagObservationStatus %in% c("M"),Value:=0]
   
   # data[,check:=ifelse(Protected==FALSE & !is.na(value_new) &
   #                         round(value_new,6)!=round(Value,6) & 
@@ -759,10 +769,49 @@ correctInputOutput<-function(data=data,
                                                     flagObservationStatus="E",
                                                     flagMethod="e")]
   
-  data[measuredElement %in% triplet$productivity & Protected==FALSE & !is.na(value_new) & round(value_new,6)!=round(Value,6) &
+  #dealing with nput flag of productivity
+  dataflagInput<-data[measuredElement %in% triplet$input, list(geographicAreaM49,timePointYears,measuredItemCPC,
+                                                               flagOinput=flagObservationStatus,
+                                                               flagMinput=flagMethod)]
+  
+  dataflagOutput<-data[measuredElement %in% triplet$output, list(geographicAreaM49,timePointYears,measuredItemCPC,
+                                                               flagOoutput=flagObservationStatus,
+                                                               flagMoutput=flagMethod)]
+  
+  data<-merge(
+      data,
+      dataflagInput,
+      by=c("geographicAreaM49","timePointYears", "measuredItemCPC"),
+      all.x = TRUE
+  )
+  
+  data<-merge(
+      data,
+      dataflagOutput,
+      by=c("geographicAreaM49","timePointYears", "measuredItemCPC"),
+      all.x = TRUE
+  )
+  
+  data[,weakFlagO:=NA_character_]
+  
+  data[,weakFlagO:=ifelse((flagOinput %in% "I") | (flagOoutput %in% "I"),"I",weakFlagO)]
+  data[,weakFlagO:=ifelse((flagOinput=="") & (flagOoutput==""),"",weakFlagO)]
+  data[,weakFlagO:=ifelse((flagOinput=="E") & (flagOoutput=="E"),"E",weakFlagO)]
+  data[,weakFlagO:=ifelse((flagOinput=="T") & (flagOoutput=="T"),"T",weakFlagO)]
+  
+  # blank and other 
+  data[,weakFlagO:=ifelse((flagOinput=="") & (flagOoutput %!in% c("","T")),flagOoutput,weakFlagO)]
+  data[,weakFlagO:=ifelse((flagOinput%!in% c("","T")) & (flagOoutput==""),flagOinput,weakFlagO)]
+  
+  data[,weakFlagO:=ifelse((flagOinput=="T") & (flagOoutput %!in% c("","T")),flagOoutput,weakFlagO)]
+  data[,weakFlagO:=ifelse((flagOinput%!in% c("","T")) & (flagOoutput=="T"),flagOinput,weakFlagO)]
+  
+  data[,weakFlagO:=ifelse((flagOinput=="E") & (flagOoutput=="I"),"I",weakFlagO)]
+  data[,weakFlagO:=ifelse((flagOinput=="I") & (flagOoutput=="I"),"I",weakFlagO)]
+  
+  data[measuredElement %in% triplet$productivity & Protected==FALSE & !is.na(value_new) & round(value_new,1)!=round(Value,1) &
            timePointYears %in% yearVals ,`:=`(Value=value_new,
-                                              flagObservationStatus=ifelse(flagObservationStatus %in% c("I","E"),"E",flagObservationStatus
-                                                                           ),
+                                              flagObservationStatus=weakFlagO,
                                               flagMethod="i"
                                               )]
   
@@ -771,32 +820,39 @@ correctInputOutput<-function(data=data,
   data[,value_new:=NULL]
   data[,difference:=NULL]
   data[,isOutlier_productivity:=NULL]
+  data[,flagOinput:=NULL]
+  data[,flagMinput:=NULL]
+  data[,flagOoutput:=NULL]
+  data[,flagMoutput:=NULL]
+  data[,weakFlagO:=NULL]
+  
+  
   
   
   return(data)
   
 }
 
-data<-correctInputOutput(data,triplet = crop_triplet_lst,partial = FALSE)
-# 
-# #livestocks type 1: stocks in head
+ # data<-correctInputOutput(data,triplet = crop_triplet_lst,partial = FALSE)
+
+#livestocks type 1: stocks in head
 data<-correctInputOutput(data,triplet = livestock_triplet_lst_1,partial = TRUE)
-# 
+#
  data<-update_slaughter(data=data,mappingData = mapping,sendTo = "child",from = "parent")
-# 
+#
  data<-correctInputOutput(data,triplet = livestock_triplet_lst_2,partial = FALSE,factor = 1000)
 
 data<-update_slaughter(data=data,mappingData = mapping,sendTo = "parent",from = "child")
 
 data<-correctInputOutput(data,triplet = livestock_triplet_lst_1,partial = FALSE)
-# 
-# 
-# 
+#
+#
+#
 # #livestock second type: stock in 1000 heads
-# 
+#
 # livestock_triplet_lst_1bis <- list(input="5112", output="5316", productivity="9999") # delete after
 
-
+message("correcting livstock outliers...")
 data<-correctInputOutput(data,triplet = livestock_triplet_lst_1bis,partial = TRUE)
 
 data<-update_slaughter(data=data,mappingData = mapping,sendTo = "child",from = "parent")
@@ -821,7 +877,7 @@ SaveData(domain = datasetConfig$domain,
 #productivity outliers after update
 
 productivityVector<-c("5421",
-                      "5316",
+                      "9999",
                       "5424",
                       "5417")
 
@@ -843,4 +899,4 @@ data_outlier<-data_element[is_outlier==TRUE & timePointYears %in% yearVals]
 
 data_outlier<-nameData(datasetConfig$domain,datasetConfig$dataset,data_outlier)
 
-write.csv(data_outlier,"Productivity_Outliers.csv")
+write.csv(data_outlier,"Productivity_Outliers_Livestock.csv")
