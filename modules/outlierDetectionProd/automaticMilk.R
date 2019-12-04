@@ -161,7 +161,7 @@ data_ef <- data[,list(geographicAreaM49,timePointYears,
                     measuredElement,measuredItemCPC,EF)]
 
 
-data[flagObservationStatus=='M', Value:= NA_real_]
+#data[flagObservationStatus=='M', Value:= NA_real_]
 
 # This function complete a triplet in case one or two element are missng
 complete_triplet <- function(data,triplets){
@@ -316,11 +316,11 @@ imput_with_average <- function(data,element){
 }
 
 
-#compute moving avarage variable foran element of a triplet
-#the varname will be: movav_element example movav_input
-compute_movav<-function(data=data_crop,element="5510",type="output") {
-    Value<-paste0("Value_",element)
-    movag<-paste0("movav_",type)
+# This function computes moving avarage variable for an element of a triplet
+# the varname will be: movav_element example movav_input
+compute_movav <- function(data=data_crop,element="5510",type="output") {
+    Value <- paste0("Value_",element)
+    movag <- paste0("movav_",type)
     
     outlier <- paste0("isOutlier_", type)
     
@@ -341,22 +341,17 @@ compute_movav<-function(data=data_crop,element="5510",type="output") {
 }
 
 
-#Correcting outliers
-#Parametrize input var, output var and productivity var
+# This function corrects the outliers
+# Parametrize input var, output var and productivity var
 
-correctInputOutput<-function(data=data,
+correctInputOutput <- function(data=data,
                              triplet=milk_triplet_lst_1,
                              factor=1
 ) {
     
-    #TO DO: quality check
-    
-    
-    # data_triplet<-copy(data)
+    data[flagObservationStatus=="M",Value:=NA_real_]
     
     data_triplet <- data[measuredElement %in% triplet]
-    
-    # data_triplet<-imput_with_average(data_triplet,triplet$productivity)
     
     inteminput<-data_triplet[measuredElement %in% triplet$input,get("measuredItemCPC")]
     
@@ -376,23 +371,27 @@ correctInputOutput<-function(data=data,
     compute_movav(data=data_triplet,element=triplet$productivity,type="productivity")
     
     
-    input<-paste0("Value_",triplet$input)
-    output<-paste0("Value_",triplet$output)
-    productivity<-paste0("Value_",triplet$productivity)
+    input <- paste0("Value_",triplet$input)
+    output <- paste0("Value_",triplet$output)
+    productivity <- paste0("Value_",triplet$productivity)
     
-    ef_input<-paste0("EF_",triplet$input)
-    ef_output<-paste0("EF_",triplet$output)
-    ef_productivity<-paste0("EF_",triplet$productivity)
+    ef_input <- paste0("EF_",triplet$input)
+    ef_output <- paste0("EF_",triplet$output)
+    ef_productivity <- paste0("EF_",triplet$productivity)
     
     data_triplet[get(ef_input)==TRUE,isOutlier_input:=TRUE]
     data_triplet[get(ef_output)==TRUE,isOutlier_output:=TRUE]
     data_triplet[get(ef_productivity)==TRUE,isOutlier_productivity:=TRUE]
     
-    data_triplet[isOutlier_productivity==TRUE,c(productivity):=movav_productivity]
-    if (factor==1000){
-        data_triplet[isOutlier_input==TRUE & isOutlier_output==FALSE,c(input):=ifelse(get(productivity)!=0,get(output)/get(productivity)*factor,NA)]
-        data_triplet[isOutlier_input==TRUE & isOutlier_output==FALSE,isOutlier_input:=FALSE]
-    }
+    # Number of Milk Animal cannot be higher than Live Animal: This module do not correct the Milk Animal number with the officil milk production
+    # though, It is possible that will create an outlier for the Milk production Yield. The results of productivity outliers
+    # will send to the user to control the official outlier on Milk Production so that they can change the number of Milk Animal, not higher than Live Animal.
+    data_triplet[isOutlier_productivity==TRUE,c(productivity):= ifelse(movav_productivity<=1, movav_productivity, 1)]
+    
+    # if (factor==1000){
+    #     data_triplet[isOutlier_input==TRUE & isOutlier_output==FALSE,c(input):=ifelse(get(productivity)!=0,get(output)/get(productivity)*factor,NA)]
+    #     data_triplet[isOutlier_input==TRUE & isOutlier_output==FALSE,isOutlier_input:=FALSE]
+    # }
     
     data_triplet[isOutlier_output==TRUE,
                  c(output):=get(input)*get(productivity)/factor]
@@ -400,7 +399,7 @@ correctInputOutput<-function(data=data,
     data_triplet[isOutlier_output==TRUE,
                  isOutlier_output:=FALSE]
     
-    
+    #if (partial==FALSE) {
         
         # data_triplet[isOutlier_input==TRUE & isOutlier_output==TRUE,
         #              c(output):=movav_output]
@@ -410,38 +409,38 @@ correctInputOutput<-function(data=data,
         # data_triplet[isOutlier_input==TRUE & isOutlier_output==TRUE,
         #              `:=`(isOutlier_input=FALSE,isOutlier_output=FALSE)]
         
-        #update the productivity
+        # Update the productivity
         data_triplet[,c(productivity):=get(output)/get(input)*factor]
         
         data_triplet[get(output)==0,c(productivity):=0]
         data_triplet[is.na(get(output)),c(productivity):=0]
         
-        
+    #}  
     
     
     
-    #Putting the data in the initial format
+    # Putting the data in the initial format
     
-    outlierdata<-data_triplet[,list(geographicAreaM49,timePointYears,measuredItemCPC,isOutlier_productivity)]
+    outlierdata <- data_triplet[,list(geographicAreaM49,timePointYears,measuredItemCPC,isOutlier_productivity)]
     
-    id.vars=c("geographicAreaM49","timePointYears","measuredItemCPC")
-    data_triplet<-data_triplet[,c(id.vars,grep("^Value",names(data_triplet),value = TRUE)),with=FALSE]
+    id.vars = c("geographicAreaM49","timePointYears","measuredItemCPC")
+    data_triplet <- data_triplet[,c(id.vars,grep("^Value",names(data_triplet),value = TRUE)),with=FALSE]
     
-    data_triplet<-melt(data_triplet, id.vars=c("geographicAreaM49","timePointYears",
-                                               "measuredItemCPC"), grep("^Value",names(data_triplet),value = TRUE),
-                       variable.name = "measuredElement", value.name = "value_new")
+    data_triplet <- melt(data_triplet, id.vars=c("geographicAreaM49","timePointYears",
+                                               "measuredItemCPC"), grep("^Value",names(data_triplet),value=TRUE),
+                       variable.name="measuredElement", value.name="value_new")
     
     data_triplet[,measuredElement:=substr(measuredElement,start = 7,stop = 10)]
     data_triplet[value_new==Inf,value_new:=NA_real_]
     
-    data<-merge(
+    data <- merge(
         data,
         data_triplet,
         by=c("geographicAreaM49","timePointYears","measuredElement", "measuredItemCPC"),
         all.x = TRUE
     )
     
-    data<-merge(
+    data <- merge(
         data,
         outlierdata,
         by=c("geographicAreaM49","timePointYears", "measuredItemCPC"),
@@ -457,24 +456,80 @@ correctInputOutput<-function(data=data,
     
     data[is.na(Protected),Protected:=FALSE]
     data[is.na(isOutlier_productivity),isOutlier_productivity:=FALSE]
+    # 
+    # data[(measuredElement %!in% triplet$productivity) & (Protected==FALSE) & (!is.na(value_new)) & (round(value_new,6)!=round(Value,6)) &
+    #          (timePointYears %in% yearVals) ,`:=`(Value=value_new,
+    #                                               flagObservationStatus="E",
+    #                                               flagMethod="e")]
+    # 
+    # data[measuredElement %in% triplet$productivity & Protected==FALSE & !is.na(value_new) & round(value_new,6)!=round(Value,6) &
+    #          timePointYears %in% yearVals ,`:=`(Value=value_new,
+    #                                             flagObservationStatus=ifelse(isOutlier_productivity==TRUE,"E",flagObservationStatus
+    #                                             ),
+    #                                             flagMethod=ifelse(isOutlier_productivity==TRUE,"i",flagMethod))]
+    # 
+    # # data[measuredElement %in% triplet$productivity & Protected==FALSE & !is.na(value_new) & round(value_new,6)!=round(Value,6) &
+    # #          timePointYears %in% yearVals ,Value:=value_new]
+    # data[,value_new:=NULL]
+    # data[,difference:=NULL]
+    # data[,isOutlier_productivity:=NULL]
+    # 
+    # 
     
     data[(measuredElement %!in% triplet$productivity) & (Protected==FALSE) & (!is.na(value_new)) & (round(value_new,6)!=round(Value,6)) &
              (timePointYears %in% yearVals) ,`:=`(Value=value_new,
                                                   flagObservationStatus="E",
                                                   flagMethod="e")]
     
-    data[measuredElement %in% triplet$productivity & Protected==FALSE & !is.na(value_new) & round(value_new,6)!=round(Value,6) &
+    #dealing with nput flag of productivity
+    dataflagInput<-data[measuredElement %in% triplet$input, list(geographicAreaM49,timePointYears,measuredItemCPC,
+                                                                 flagOinput=flagObservationStatus,
+                                                                 flagMinput=flagMethod)]
+    
+    dataflagOutput<-data[measuredElement %in% triplet$output, list(geographicAreaM49,timePointYears,measuredItemCPC,
+                                                                   flagOoutput=flagObservationStatus,
+                                                                   flagMoutput=flagMethod)]
+    
+    data<-merge(
+        data,
+        dataflagInput,
+        by=c("geographicAreaM49","timePointYears", "measuredItemCPC"),
+        all.x = TRUE
+    )
+    
+    data<-merge(
+        data,
+        dataflagOutput,
+        by=c("geographicAreaM49","timePointYears", "measuredItemCPC"),
+        all.x = TRUE
+    )
+    
+    data[,weakFlagO:=NA_character_]
+    
+    data[,weakFlagO:=ifelse((flagOinput %in% "I") | (flagOoutput %in% "I"),"I",weakFlagO)]
+    data[,weakFlagO:=ifelse((flagOinput=="") & (flagOoutput==""),"",weakFlagO)]
+    data[,weakFlagO:=ifelse((flagOinput=="E") & (flagOoutput=="E"),"E",weakFlagO)]
+    data[,weakFlagO:=ifelse((flagOinput=="T") & (flagOoutput=="T"),"T",weakFlagO)]
+    
+    # blank and other 
+    data[,weakFlagO:=ifelse((flagOinput=="") & (flagOoutput %!in% c("","T")),flagOoutput,weakFlagO)]
+    data[,weakFlagO:=ifelse((flagOinput%!in% c("","T")) & (flagOoutput==""),flagOinput,weakFlagO)]
+    
+    data[,weakFlagO:=ifelse((flagOinput=="T") & (flagOoutput %!in% c("","T")),flagOoutput,weakFlagO)]
+    data[,weakFlagO:=ifelse((flagOinput%!in% c("","T")) & (flagOoutput=="T"),flagOinput,weakFlagO)]
+    
+    data[,weakFlagO:=ifelse((flagOinput=="E") & (flagOoutput=="I"),"I",weakFlagO)]
+    data[,weakFlagO:=ifelse((flagOinput=="I") & (flagOoutput=="I"),"I",weakFlagO)]
+    
+    data[measuredElement %in% triplet$productivity & Protected==FALSE & !is.na(value_new) & round(value_new,1)!=round(Value,1) &
              timePointYears %in% yearVals ,`:=`(Value=value_new,
-                                                flagObservationStatus=ifelse(isOutlier_productivity==TRUE,"E",flagObservationStatus
-                                                ),
-                                                flagMethod=ifelse(isOutlier_productivity==TRUE,"i",flagMethod))]
+                                                flagObservationStatus=weakFlagO,
+                                                flagMethod="i"
+             )]
     
     # data[measuredElement %in% triplet$productivity & Protected==FALSE & !is.na(value_new) & round(value_new,6)!=round(Value,6) &
     #          timePointYears %in% yearVals ,Value:=value_new]
-    data[,value_new:=NULL]
-    data[,difference:=NULL]
-    data[,isOutlier_productivity:=NULL]
-    
+    data[, c('value_new', 'difference', 'isOutlier_productivity', 'flagOinput', 'flagMinput', 'flagOoutput', 'flagMoutput', 'weakFlagO'):= NULL]
     
     return(data)
     
@@ -505,7 +560,8 @@ SaveData(domain = datasetConfig$domain,
 
 # Productivity outliers after update
 
-productivityVector <- c("5417", "9999", "5318", "5111", "5510")
+#productivityVector <- c("5417", "9999", "5318", "5111", "5510")
+productivityVector <- c("5417", "9999")
 
 data_element<-data[measuredElement %in% productivityVector]
 
@@ -524,4 +580,4 @@ data_outlier <- data_element[is_outlier==TRUE & timePointYears %in% yearVals]
 
 data_outlier <- nameData(datasetConfig$domain,datasetConfig$dataset,data_outlier)
 
-write.csv(data_outlier,"OutliersMilk2.csv")
+write.csv(data_outlier,"OutliersMilk.csv")
