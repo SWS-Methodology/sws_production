@@ -6,7 +6,7 @@
 ##' **Description:**
 ##'
 ##' This module is designed to identify and automatically correct the outliers in the production environement.
-##' It can detect any triplets (so called productivity, input and output) in Crop or Livestock.
+##' It can detect any triplets (so called productivity, input and output) in Crop, Livestock or Milk.
 ##'
 
 message("plug-in starts to run")
@@ -690,10 +690,10 @@ if (imputation_selection == "CROP") {
   data <- correctInputOutput(data, triplet = livestock_triplet_lst_1bis, partial = FALSE)
 
 } else {
-    
-    data<-correctInputOutput(data,triplet = milk_triplet_lst_1)
-    
-    data<-correctInputOutput(data,triplet = milk_triplet_lst_2,factor = 1000)
+  
+  data<-correctInputOutput(data,triplet = milk_triplet_lst_1)
+  
+  data<-correctInputOutput(data,triplet = milk_triplet_lst_2,factor = 1000)
     
 }
 
@@ -721,28 +721,28 @@ SaveData(domain = datasetConfig$domain,
 
 #productivity outliers after update
 
-productivityVector <- c("5421",
-                      "9999",
-                      "5424",
-                      "5417")
-
-
-data_element <- data[measuredElement %in% productivityVector]
-
-data_element[,
-             Meanold:= mean(Value[timePointYears %in% interval], na.rm = TRUE),
-             by = c('geographicAreaM49', 'measuredItemCPC', 'measuredElement')
-             ]
-
-data_element[is.na(Value), Value:= 0]
-
-data_element[, ratio:= Value / Meanold]
-
-data_element[, is_outlier:= ifelse(abs(ratio-1) > THRESHOLD_IMPUTED & Protected == FALSE,TRUE,FALSE)]
-
-data_outlier <- data_element[is_outlier == TRUE & timePointYears %in% yearVals]
-
-data_outlier <- nameData(datasetConfig$domain, datasetConfig$dataset, data_outlier)
-
-write.csv(data_outlier, "Productivity_Outliers_Livestock.csv")
-
+# productivityVector <- c("5421",
+#                       "9999",
+#                       "5424",
+#                       "5417")
+# 
+# 
+# data_element <- data[measuredElement %in% productivityVector]
+# 
+# data_element[,
+#              Meanold:= mean(Value[timePointYears %in% interval], na.rm = TRUE),
+#              by = c('geographicAreaM49', 'measuredItemCPC', 'measuredElement')
+#              ]
+# 
+# data_element[is.na(Value), Value:= 0]
+# 
+# data_element[, ratio:= Value / Meanold]
+# 
+# data_element[, is_outlier:= ifelse(abs(ratio-1) > THRESHOLD_IMPUTED & Protected == FALSE,TRUE,FALSE)]
+# 
+# data_outlier <- data_element[is_outlier == TRUE & timePointYears %in% yearVals]
+# 
+# data_outlier <- nameData(datasetConfig$domain, datasetConfig$dataset, data_outlier)
+# 
+# write.csv(data_outlier, "Productivity_Outliers_Livestock.csv")
+print('Plug-in Completed')
