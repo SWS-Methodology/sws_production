@@ -33,7 +33,7 @@ R_SWS_SHARE_PATH = Sys.getenv("R_SWS_SHARE_PATH")
 if(CheckDebug()){
     
     library(faoswsModules)
-    SETTINGS = ReadSettings("C:\\Users\\NIANGAM\\Dropbox\\GITHUB\\faoswsProduction\\modules\\outlierDetectionProd/sws.yml")
+    SETTINGS = ReadSettings("modules\\outlierDetectionProd\\sws.yml")
     
     ## If you're not on the system, your settings will overwrite any others
     R_SWS_SHARE_PATH = SETTINGS[["share"]]
@@ -47,16 +47,86 @@ if(CheckDebug()){
     
 }
 
-# Off-take rates are written on ..... 
-# No need now: offtake rates are now calculated
-# dir_to_save <- file.path(R_SWS_SHARE_PATH, "Livestock",paste0("validationFAODOMAIN_rosa"))
-# if(!file.exists(dir_to_save)){
-#     dir.create(dir_to_save, recursive = TRUE)
-# }
+
+# Get data configuration and session
+sessionKey = swsContext.datasets[[1]]
+datasetConfig = GetDatasetConfig(domainCode = sessionKey@domain,
+                                 datasetCode = sessionKey@dataset)
+
+completeImputationKey = getCompleteImputationKey("production")
+
+# CROP,LIVESTOCK or MILK
+imputation_selection <- swsContext.computationParams$imputation_selection
+endYear = as.numeric(swsContext.computationParams$last_year)
+geoM49 = swsContext.computationParams$geom49
+
+# Set-up the parameters
+THRESHOLD_IMPUTED <- as.numeric(swsContext.computationParams$outliers_threshold)
+
+if (swsContext.computationParams$imputation_timeWindow=="lastThree") {
+    window <- 3 
+} else {
+    window <- 5 
+}
+
+startYear <- endYear - window + 1
+yearVals <- startYear:endYear
+
+interval <- (startYear-window):(startYear-1)
+
+animalData =
+    sessionKey %>%
+    GetData(key = .) #%>%
+#preProcessing(data = .)
+
+#clean the subset of country it was just for testing
+data = animalData #[geographicAreaM49 %in% c("840","426","440")]
+
+
+# triplet of livestock with stocks in head
+livestock_triplet_lst_1 <- list(input="5111", output="5315", productivity="9999")
+livestock_triplet_lst_2 <- list(input="5320", output="5510", productivity="5417") 
+
+#Livestock triplet with stock unit in 1000 head
+livestock_triplet_lst_1bis <- list(input="5112", output="5316", productivity="9999") 
+livestock_triplet_lst_2bis <- list(input="5321", output="5510", productivity="5424") 
+
+#triplets for crops
+crop_triplet_lst<-list(input="5312", output="5510", productivity="5421")
+
+#milk triplet
+milk_triplet_lst_1 <- list(input="5111", output="5318", productivity="9999")
+milk_triplet_lst_2 <- list(input="5318", output="5510", productivity="5417") 
+
+#QUality check
+
+if (imputation_selection == "CROP") {
+    
+    stopifnot(sum(unlist(crop_triplet_lst) %in% unique(data$measuredElement))==3)
+    
+} else if (imputation_selection == "LIVESTOCK") {
+    
+    stopifnot(sum(c(livestock_triplet_lst_1$input,livestock_triplet_lst_1$output) %in% unique(data$measuredElement))==2)
+    
+    stopifnot(sum(unlist(livestock_triplet_lst_2) %in% unique(data$measuredElement))==3)
+    
+} else if (imputation_selection == "LIVESTOCK1000"){
+    
+    stopifnot(sum(c(livestock_triplet_lst_1bis$input,livestock_triplet_lst_1bis$output) %in% unique(data$measuredElement))==2)
+    
+    stopifnot(sum(unlist(livestock_triplet_lst_2bis) %in% unique(data$measuredElement))==3) 
+    
+} else {
+    
+    stopifnot(sum(c(milk_triplet_lst_1$input,milk_triplet_lst_1$output) %in% unique(data$measuredElement))==2)
+    
+    stopifnot(sum(unlist(milk_triplet_lst_2) %in% unique(data$measuredElement))==3)
+}
 
 #### FUNCTIONS #####
 
 `%!in%` = Negate(`%in%`)
+
 # rollavg() is a rolling average function that uses computed averages
 # to generate new values if there are missing values (and FOCB/LOCF).
 # I.e.:
@@ -162,7 +232,9 @@ Label_outlier <- function(data = data, element, type){
   
   data[, ratio:= get(Value) / Meanold]
   
-  data[, c(outlier):= ifelse(abs(ratio-1) > THRESHOLD_IMPUTED & get(Protected) == FALSE, TRUE, FALSE)]
+  data[, c(outlier):= ifelse(abs(ratio-1) > THRESHOLD_IMPUTED & 
+                                 get(Protected) == FALSE, TRUE, FALSE) &
+           timePointYears %in% yearVals]
   
   data[,`:=`(Meanold = NULL, ratio = NULL)]
   
@@ -259,7 +331,6 @@ correctInputOutput <- function(data = data,
   
   data_triplet <- dcast.data.table(data_triplet, geographicAreaM49 + measuredItemCPC + timePointYears ~ measuredElement, value.var = list('Value', 'Protected', 'EF'))
   
-  
   Label_outlier(data = data_triplet, element = triplet$output, type = "output")
   compute_movav(data = data_triplet, element = triplet$output, type = "output")
   
@@ -272,7 +343,7 @@ correctInputOutput <- function(data = data,
   
   input <- paste0("Value_", triplet$input)
   output <- paste0("Value_", triplet$output)
-  productivity < -paste0("Value_", triplet$productivity)
+  productivity <- paste0("Value_", triplet$productivity)
   
   ef_input <- paste0("EF_", triplet$input)
   ef_output <- paste0("EF_", triplet$output)
@@ -450,78 +521,44 @@ complete_triplet<-function(data,triplets){
 }
 
 
-# Load and check the computation parameters
-imputationSelection = swsContext.computationParams$imputation_selection
-if(!imputationSelection %in% c("session", "all"))
-    stop("Incorrect imputation selection specified")
-
-imputationTimeWindow = swsContext.computationParams$imputation_timeWindow
-if(!imputationTimeWindow %in% c("all", "lastThree"))
-    stop("Incorrect imputation selection specified")
-
-# Get data configuration and session
-sessionKey = swsContext.datasets[[1]]
-datasetConfig = GetDatasetConfig(domainCode = sessionKey@domain,
-                                 datasetCode = sessionKey@dataset)
-
-completeImputationKey = getCompleteImputationKey("production")
+## END fuction-----
 
 
-# triplet of livestock with stocks in head
-livestock_triplet_lst_1 <- list(input="5111", output="5315", productivity="9999")
-livestock_triplet_lst_2 <- list(input="5320", output="5510", productivity="5417") 
- 
-#Livestock triplet with stock unit in 1000 head
-livestock_triplet_lst_1bis <- list(input="5112", output="5316", productivity="9999") 
-livestock_triplet_lst_2bis <- list(input="5321", output="5510", productivity="5424") 
- 
-#triplets for crops
-crop_triplet_lst<-list(input="5312", output="5510", productivity="5421")
- 
-#to remove
-# triplets<-c("5312","5510","5421","5111","5315",
-#            "5320","5417", "5112","5316",
-#            "5321","5510","5424")
- 
- 
-animalData =
-    sessionKey %>%
-    GetData(key = .) #%>%
-    #preProcessing(data = .)
-
-#clean the subset of country it was just for testing
-data = animalData #[geographicAreaM49 %in% c("840","426","440")]
-
-# CROP,LIVESTOCK or MILK
-imputation_selection <- swsContext.computationParams$imputation_selection
-endYear = as.numeric(swsContext.computationParams$last_year)
-geoM49 = swsContext.computationParams$geom49
-
-# Set-up the parameters
-# startYear <- 2014
-# endYear <- 2018
-THRESHOLD_IMPUTED <- as.numeric(swsContext.computationParams$outliers_threshold)
-window <- 5
-startYear <- endYear - window + 1
-yearVals <- startYear:endYear
-
-interval <- (startYear-window):(startYear-1)
 
 # Read the data needed
 flagValidTable <- ReadDatatable("valid_flags")
-mapping <- ReadDatatable("animal_parent_child_mapping")
 
-# The FBS tree is used to map only meat items but not offals and fats
-message("Download fbsTree from SWS...")
-fbsTree = ReadDatatable("fbs_tree")
-fbsTree = data.table(fbsTree)
-setnames(fbsTree, colnames(fbsTree) , c( "fbsID1", "fbsID2", "fbsID3","fbsID4", "measuredItemSuaFbs"))
-setcolorder(fbsTree, c("fbsID4", "measuredItemSuaFbs", "fbsID1", "fbsID2", "fbsID3"))
+if (imputation_selection=="MILK") {
+    
+    # This chunk of the help us to create an artifical triplet which is actually not exist. We create a triplet with Live Animal, Milk Animal and Yield (9999)
+    mapping <- ReadDatatable('animal_milk_correspondence')
+    setnames(mapping,c("animal_item_cpc", "milk_item_cpc"), c("measuredItemAnimalCPC", "measuredItemCPC"))
+    
+    data2 <- merge(data[measuredElement == '5318'], mapping, by='measuredItemCPC')
+    data2[, measuredItemCPC:= NULL]
+    setnames(data2,"measuredItemAnimalCPC", "measuredItemCPC")
+    
+    data2<-data2[,colnames(data),with=FALSE]
+    
+    data<-rbind(data,data2[!data,on=c("geographicAreaM49","timePointYears",
+                                      "measuredElement","measuredItemCPC")])
+} else {
+    
+    mapping <- ReadDatatable("animal_parent_child_mapping")
+    # The FBS tree is used to map only meat items but not offals and fats
+    message("Download fbsTree from SWS...")
+    fbsTree = ReadDatatable("fbs_tree")
+    fbsTree = data.table(fbsTree)
+    setnames(fbsTree, colnames(fbsTree) , c( "fbsID1", "fbsID2", "fbsID3","fbsID4", "measuredItemSuaFbs"))
+    setcolorder(fbsTree, c("fbsID4", "measuredItemSuaFbs", "fbsID1", "fbsID2", "fbsID3"))
+    
+    # Extract meat items from the fbstree
+    meatItem <- fbsTree[fbsID3 == "2943", get("measuredItemSuaFbs")]
+    
+    mapping <- mapping[measured_item_child_cpc %in% meatItem]
+    
+}
 
-# Extract meat items from the fbstree
-meatItem <- fbsTree[fbsID3 == "2943", get("measuredItemSuaFbs")]
-
-mapping <- mapping[measured_item_child_cpc %in% meatItem]
 
 message("Estimation of off-take rates...")
 
@@ -557,6 +594,24 @@ if(imputation_selection=="LIVESTOCK1000") {
 
 }
 
+
+if(imputation_selection=="MILK") {
+    # Estimating the ratio between Live animals and Milk animals (these animals are only in head). We give flag I,i for this new variable.
+    dataEstYield <-data[measuredElement %in% c("5111","5318")]
+    dataEstYield <- dcast.data.table(dataEstYield, geographicAreaM49 + measuredItemCPC + timePointYears ~ measuredElement, value.var = list('Value'))
+    dataEstYield[,Value:=`5318`/`5111`]
+    dataEstYield[,`5111`:=NULL]
+    dataEstYield[,`5318`:=NULL]
+    dataEstYield[,measuredElement:=9999]
+    dataEstYield[,flagObservationStatus:="I"]
+    dataEstYield[,flagMethod:="i"]
+    dataEstYield <- dataEstYield[,names(data),with=FALSE]
+    dataEstYield <- unique(dataEstYield,by=c(colnames(data)))
+    data <- rbind(data,dataEstYield)
+    
+}
+
+
 data <- merge(
     data,
     flagValidTable,
@@ -568,9 +623,6 @@ data[flagObservationStatus == "E" & flagMethod == "e", Protected:= FALSE]
 data[flagObservationStatus == "T" & flagMethod == "q", Protected:= FALSE]
 
 data[, EF:= ifelse(flagObservationStatus == "E" & flagMethod == "e", TRUE, FALSE)]
-
-data_ef <- data[,list(geographicAreaM49, timePointYears,
-                    measuredElement, measuredItemCPC, EF)]
 
 #this may not be important when reading sessions after imputation
 #because all should be complete
@@ -595,6 +647,14 @@ if ( sum(unlist(livestock_triplet_lst_2bis)%in% data$measuredElement) == 3) {
     data <- complete_triplet(data, livestock_triplet_lst_2bis)
 }
 
+if ( sum(unlist(milk_triplet_lst_1) %in% data$measuredElement) == 3) {
+    data <- complete_triplet(data,milk_triplet_lst_1)
+}
+
+if ( sum(unlist(milk_triplet_lst_2) %in% data$measuredElement) == 3) {
+    data <- complete_triplet(data,milk_triplet_lst_2)
+}
+
 # data<-correctInputOutput(data,triplet = crop_triplet_lst,partial = FALSE)
 
 message("Correction...")
@@ -616,7 +676,7 @@ if (imputation_selection == "CROP") {
 
   data <- correctInputOutput(data, triplet = livestock_triplet_lst_1, partial = FALSE)
 
-} else {
+} else if(imputation_selection == "LIVESTOCK1000") {
 
   # livestock type 2: stock in 1000 heads
   data <- correctInputOutput(data, triplet = livestock_triplet_lst_1bis, partial = TRUE)
@@ -629,11 +689,28 @@ if (imputation_selection == "CROP") {
 
   data <- correctInputOutput(data, triplet = livestock_triplet_lst_1bis, partial = FALSE)
 
+} else {
+    
+    data<-correctInputOutput(data,triplet = milk_triplet_lst_1)
+    
+    data<-correctInputOutput(data,triplet = milk_triplet_lst_2,factor = 1000)
+    
 }
 
 
-dataf <- data[measuredElement != "9999"]
-dataf <- dataf[!is.na(Value)]
+if (imputation_selection=="MILK"){
+    
+    dataf1 <- data[(measuredElement %in% c("5318")) & (measuredItemCPC %in% mapping[,get("measuredItemAnimalCPC")])]
+    dataf <- data[!dataf1, on = c(names(data))]
+    dataf <- dataf[measuredElement %!in% c("9999","5111")]
+    dataf <- dataf[!is.na(Value)]
+    
+} else {
+    dataf <- data[measuredElement != "9999"]
+    dataf <- dataf[!is.na(Value)]   
+}
+
+
 
 dataf <- dataf[timePointYears %in% yearVals, c(names(animalData)), with=FALSE]
 
@@ -668,3 +745,4 @@ data_outlier <- data_element[is_outlier == TRUE & timePointYears %in% yearVals]
 data_outlier <- nameData(datasetConfig$domain, datasetConfig$dataset, data_outlier)
 
 write.csv(data_outlier, "Productivity_Outliers_Livestock.csv")
+
