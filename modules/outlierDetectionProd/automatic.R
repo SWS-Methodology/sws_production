@@ -353,7 +353,15 @@ correctInputOutput <- function(data = data,
   data_triplet[get(ef_output) == TRUE,isOutlier_output:= TRUE]
   data_triplet[get(ef_productivity) == TRUE,isOutlier_productivity:= TRUE]
   
-  data_triplet[isOutlier_productivity == TRUE, c(productivity):= movav_productivity]
+  
+  # Number of Salughtered Animal cannot be higher than Live Animal:
+  if (factor == 1){
+    data_triplet[isOutlier_productivity==TRUE,c(productivity):= ifelse(movav_productivity<=1, movav_productivity, 1)]
+  } else {
+    data_triplet[isOutlier_productivity==TRUE,c(productivity):=movav_productivity]
+  }
+  
+  # data_triplet[isOutlier_productivity == TRUE, c(productivity):= movav_productivity]
   
   data_triplet[isOutlier_input == TRUE & isOutlier_output == FALSE, c(input):= ifelse(get(productivity) != 0, get(output)/get(productivity)*factor, NA)]
   data_triplet[isOutlier_input == TRUE & isOutlier_output == FALSE, isOutlier_input:= FALSE]
@@ -475,14 +483,7 @@ correctInputOutput <- function(data = data,
   
   # data[measuredElement %in% triplet$productivity & Protected==FALSE & !is.na(value_new) & round(value_new,6)!=round(Value,6) &
   #          timePointYears %in% yearVals ,Value:=value_new]
-  data[, value_new:= NULL]
-  data[, difference:= NULL]
-  data[, isOutlier_productivity:= NULL]
-  data[, flagOinput:= NULL]
-  data[, flagMinput:= NULL]
-  data[, flagOoutput:= NULL]
-  data[, flagMoutput:= NULL]
-  data[, weakFlagO:= NULL] 
+  data[, c('value_new', 'difference', 'isOutlier_productivity', 'flagOinput', 'flagMinput', 'flagOoutput', 'flagMoutput', 'weakFlagO'):= NULL]
   
   return(data)
   
@@ -596,18 +597,18 @@ if(imputation_selection=="LIVESTOCK1000") {
 
 
 if(imputation_selection=="MILK") {
-    # Estimating the ratio between Live animals and Milk animals (these animals are only in head). We give flag I,i for this new variable.
-    dataEstYield <-data[measuredElement %in% c("5111","5318")]
-    dataEstYield <- dcast.data.table(dataEstYield, geographicAreaM49 + measuredItemCPC + timePointYears ~ measuredElement, value.var = list('Value'))
-    dataEstYield[,Value:=`5318`/`5111`]
-    dataEstYield[,`5111`:=NULL]
-    dataEstYield[,`5318`:=NULL]
-    dataEstYield[,measuredElement:=9999]
-    dataEstYield[,flagObservationStatus:="I"]
-    dataEstYield[,flagMethod:="i"]
-    dataEstYield <- dataEstYield[,names(data),with=FALSE]
-    dataEstYield <- unique(dataEstYield,by=c(colnames(data)))
-    data <- rbind(data,dataEstYield)
+  # Estimating the ratio between Live animals and Milk animals (these animals are only in head). We give flag I,i for this new variable.
+  dataEstYield <-data[measuredElement %in% c("5111","5318")]
+  dataEstYield <- dcast.data.table(dataEstYield, geographicAreaM49 + measuredItemCPC + timePointYears ~ measuredElement, value.var = list('Value'))
+  dataEstYield[,Value:=`5318`/`5111`]
+  dataEstYield[,`5111`:=NULL]
+  dataEstYield[,`5318`:=NULL]
+  dataEstYield[,measuredElement:=9999]
+  dataEstYield[,flagObservationStatus:="I"]
+  dataEstYield[,flagMethod:="i"]
+  dataEstYield <- dataEstYield[,names(data),with=FALSE]
+  dataEstYield <- unique(dataEstYield,by=c(colnames(data)))
+  data <- rbind(data,dataEstYield)
     
 }
 
@@ -691,9 +692,9 @@ if (imputation_selection == "CROP") {
 
 } else {
   
-  data<-correctInputOutput(data,triplet = milk_triplet_lst_1)
+  data<-correctInputOutput(data,triplet = milk_triplet_lst_1, partial = FALSE)
   
-  data<-correctInputOutput(data,triplet = milk_triplet_lst_2,factor = 1000)
+  data<-correctInputOutput(data,triplet = milk_triplet_lst_2, partial = FALSE, factor = 1000)
     
 }
 
