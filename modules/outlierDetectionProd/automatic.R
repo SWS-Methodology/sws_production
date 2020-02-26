@@ -13,18 +13,18 @@ message("plug-in starts to run")
 
 # Import libraries
 suppressMessages({
-    library(data.table)
-    library(faosws)
-    library(faoswsFlag)
-    library(faoswsUtil)
-    library(faoswsImputation)
-    library(faoswsProduction)
-    library(faoswsProcessing)
-    library(faoswsEnsure)
-    library(magrittr)
-    library(dplyr)
-    library(sendmailR)
-    
+  library(data.table)
+  library(faosws)
+  library(faoswsFlag)
+  library(faoswsUtil)
+  library(faoswsImputation)
+  library(faoswsProduction)
+  library(faoswsProcessing)
+  library(faoswsEnsure)
+  library(magrittr)
+  library(dplyr)
+  library(sendmailR)
+  library(faoswsStandardization)
 })
 
 
@@ -82,27 +82,35 @@ animalData =
 #clean the subset of country it was just for testing
 data = animalData #[geographicAreaM49 %in% c("840","426","440")]
 
+mailto = swsContext.userEmail
 
-# triplet of livestock with stocks in head
+# Livestock triplets with stocks in head
 livestock_triplet_lst_1 <- list(input="5111", output="5315", productivity="9999")
 livestock_triplet_lst_2 <- list(input="5320", output="5510", productivity="5417") 
 
-#Livestock triplet with stock unit in 1000 head
+# Livestock triplets with stock unit in 1000 head
 livestock_triplet_lst_1bis <- list(input="5112", output="5316", productivity="9999") 
 livestock_triplet_lst_2bis <- list(input="5321", output="5510", productivity="5424") 
 
-#triplets for crops
+# Crop triplet
 crop_triplet_lst<-list(input="5312", output="5510", productivity="5421")
 
-#milk triplet
+# Milk triplet
 milk_triplet_lst_1 <- list(input="5111", output="5318", productivity="9999")
-milk_triplet_lst_2 <- list(input="5318", output="5510", productivity="5417") 
+milk_triplet_lst_2 <- list(input="5318", output="5510", productivity="5417")
 
-#QUality check
+# 
+
+# Quality check
 
 if (imputation_selection == "CROP") {
     
     stopifnot(sum(unlist(crop_triplet_lst) %in% unique(data$measuredElement))==3)
+    
+    # if (sum(unlist(crop_triplet_lst) %in% unique(data$measuredElement))!=3){
+    #   message = paste("Please run the plug-in with all Crop Items:", crop_triplet_lst, sep='\n')
+    #   sendmailR::sendmail(from = "no-reply@fao.org", to = mailto, subject = "missing triplet", body = message, remove = TRUE)
+    # }
     
 } else if (imputation_selection == "LIVESTOCK") {
     
@@ -110,17 +118,35 @@ if (imputation_selection == "CROP") {
     
     stopifnot(sum(unlist(livestock_triplet_lst_2) %in% unique(data$measuredElement))==3)
     
+    # if ((sum(c(livestock_triplet_lst_1$input,livestock_triplet_lst_1$output) %in% unique(data$measuredElement))!=2) |
+    #   (sum(unlist(livestock_triplet_lst_2) %in% unique(data$measuredElement))!=3)) {
+    #   message = paste("Please run the plug-in with all Livestock Items:", livestock_triplet_lst_1, livestock_triplet_lst_2, sep='\n')
+    #   sendmailR::sendmail(from = "no-reply@fao.org", to = mailto, subject = "missing triplet", body = message, remove = TRUE)
+    # }
+    
 } else if (imputation_selection == "LIVESTOCK1000"){
     
     stopifnot(sum(c(livestock_triplet_lst_1bis$input,livestock_triplet_lst_1bis$output) %in% unique(data$measuredElement))==2)
     
-    stopifnot(sum(unlist(livestock_triplet_lst_2bis) %in% unique(data$measuredElement))==3) 
+    stopifnot(sum(unlist(livestock_triplet_lst_2bis) %in% unique(data$measuredElement))==3)
     
+    # if ((sum(c(livestock_triplet_lst_1bis$input,livestock_triplet_lst_1bis$output) %in% unique(data$measuredElement))!=2) |
+    #     (sum(unlist(livestock_triplet_lst_2bis) %in% unique(data$measuredElement))!=3)) {
+    #   message = paste("Please run the plug-in with all Livestock 1000 Items:", livestock_triplet_lst_1bis, livestock_triplet_lst_2bis, sep='\n')
+    #   sendmailR::sendmail(from = "no-reply@fao.org", to = mailto, subject = "missing triplet", body = message, remove = TRUE)
+    # }
+
 } else {
     
     stopifnot(sum(c(milk_triplet_lst_1$input,milk_triplet_lst_1$output) %in% unique(data$measuredElement))==2)
     
     stopifnot(sum(unlist(milk_triplet_lst_2) %in% unique(data$measuredElement))==3)
+    
+    # if ((sum(c(milk_triplet_lst_1$input,milk_triplet_lst_1$output) %in% unique(data$measuredElement))!=2) |
+    #     (sum(unlist(milk_triplet_lst_2) %in% unique(data$measuredElement))!=3)) {
+    #   message = paste("Please run the plug-in with all Milk Items:", milk_triplet_lst_1, milk_triplet_lst_2, sep='\n')
+    #   sendmailR::sendmail(from = "no-reply@fao.org", to = mailto, subject = "missing triplet", body = message, remove = TRUE)
+    # }
 }
 
 #### FUNCTIONS #####
@@ -173,6 +199,12 @@ update_slaughter <- function(data, mappingData, sendTo, from = "parent"){
     stopifnot(sendTo %in% c("parent","child"))
     stopifnot(from %in% c("parent","child"))  
     
+    datacopied <- copy(data)
+    
+    datacopied <- datacopied[, c("geographicAreaM49","timePointYears", "measuredItemCPC", 
+                                 "measuredElement", "flagObservationStatus", "flagMethod",
+                                 "Valid", "Protected", "EF"), with = FALSE]
+    
     mapping1 <- copy(mappingData)
     
     element <- paste0("measured_element_", sendTo)
@@ -181,31 +213,44 @@ update_slaughter <- function(data, mappingData, sendTo, from = "parent"){
     element1 <- paste0("measured_element_", from)
     item1 <- paste0("measured_item_", from, "_cpc")
     
-    setnames(mapping1, c(item), c("measuredItemCPC"))
-    setnames(mapping1, c(element), "measuredElement")
+    setnames(mapping1, c(item1), c("measuredItemCPC"))
+    setnames(mapping1, c(element1), "measuredElement")
     
     datamerged <- merge(
-        data,
-        mapping1,
-        by = c("measuredElement", "measuredItemCPC")
+      data,
+      mapping1,
+      by = c("measuredElement", "measuredItemCPC")
     )
     
     datamerged <- datamerged[, c("geographicAreaM49","timePointYears",
-                                 element1,
-                                 item1,
+                                 element,
+                                 item,
                                  "Value", "flagObservationStatus", "flagMethod",
-                                 "Valid", "Protected", "EF"),with=FALSE
-                           ]
-    setnames(datamerged, c(item1), c("measuredItemCPC"))
-    setnames(datamerged, c(element1), "measuredElement")
+                                 "Valid", "Protected", "EF"), with = FALSE
+                             ]
+    setnames(datamerged, c(item), c("measuredItemCPC"))
+    setnames(datamerged, c(element), "measuredElement")
     
     datamerged <- datamerged[, names(data), with = FALSE]
     
-    data <- rbind(
-        data,
-        datamerged[!data, on=c('geographicAreaM49', 'timePointYears',
-                               'measuredItemCPC', 'measuredElement')]
-    )
+    data1 <- data[!datamerged, on=c('geographicAreaM49', 'timePointYears', 'measuredItemCPC', 'measuredElement')]
+    
+    data <- rbind(data1, datamerged)
+    
+    if (element == 'measured_element_child') {
+      
+      data <- data[datamerged, flagMethod := 'c', on=c('geographicAreaM49', 'timePointYears', 'measuredItemCPC', 'measuredElement')]
+
+    } else {
+      
+      data2 <- data[, c("geographicAreaM49","timePointYears",
+                        "measuredElement", "measuredItemCPC",
+                                   "Value"), with = FALSE
+                               ]
+      
+      data <- merge(data2, datacopied, by=c('geographicAreaM49', 'timePointYears', 'measuredItemCPC', 'measuredElement'))
+      
+    }
     
     return(data)
     
@@ -354,7 +399,9 @@ correctInputOutput <- function(data = data,
   data_triplet[get(ef_productivity) == TRUE,isOutlier_productivity:= TRUE]
   
   
-  # Number of Salughtered Animal cannot be higher than Live Animal:
+  # Number of Milk Animal cannot be higher than Live Animal: This module do not correct the Milk Animal number with the officil milk production
+  # though, It is possible that will create an outlier for the Milk production Yield. The results of productivity outliers
+  # will send to the user to control the official outlier on Milk Production so that they can change the number of Milk Animal, not higher than Live Animal.
   if (factor == 1){
     data_triplet[isOutlier_productivity==TRUE,c(productivity):= ifelse(movav_productivity<=1, movav_productivity, 1)]
   } else {
@@ -711,7 +758,7 @@ if (imputation_selection=="MILK"){
     dataf <- dataf[!is.na(Value)]   
 }
 
-
+# Save the correction on the session
 
 dataf <- dataf[timePointYears %in% yearVals, c(names(animalData)), with=FALSE]
 
@@ -720,30 +767,42 @@ SaveData(domain = datasetConfig$domain,
          data = dataf, waitTimeout = 2000000)
 
 
-#productivity outliers after update
+# Send the productivity outliers (plus an extra csv file which contains productivity > 1) to the user 
 
-# productivityVector <- c("5421",
-#                       "9999",
-#                       "5424",
-#                       "5417")
-# 
-# 
-# data_element <- data[measuredElement %in% productivityVector]
-# 
-# data_element[,
-#              Meanold:= mean(Value[timePointYears %in% interval], na.rm = TRUE),
-#              by = c('geographicAreaM49', 'measuredItemCPC', 'measuredElement')
-#              ]
-# 
-# data_element[is.na(Value), Value:= 0]
-# 
-# data_element[, ratio:= Value / Meanold]
-# 
-# data_element[, is_outlier:= ifelse(abs(ratio-1) > THRESHOLD_IMPUTED & Protected == FALSE,TRUE,FALSE)]
-# 
-# data_outlier <- data_element[is_outlier == TRUE & timePointYears %in% yearVals]
-# 
-# data_outlier <- nameData(datasetConfig$domain, datasetConfig$dataset, data_outlier)
-# 
-# write.csv(data_outlier, "Productivity_Outliers_Livestock.csv")
+productivityVector <- c("5421",
+                      "9999",
+                      "5424",
+                      "5417")
+
+
+data_element <- data[measuredElement %in% productivityVector]
+
+data_element[,
+             Meanold:= mean(Value[timePointYears %in% interval], na.rm = TRUE),
+             by = c('geographicAreaM49', 'measuredItemCPC', 'measuredElement')
+             ]
+
+data_element[is.na(Value), Value:= 0]
+
+data_element[, ratio:= Value / Meanold]
+
+data_element[, is_outlier:= ifelse(abs(ratio-1) > THRESHOLD_IMPUTED & Protected == FALSE,TRUE,FALSE)]
+
+data_outlier <- data_element[is_outlier == TRUE & timePointYears %in% yearVals]
+
+data_outlier <- nameData(datasetConfig$domain, datasetConfig$dataset, data_outlier)
+
+data_outlier[, measuredItemCPC := paste0("'", measuredItemCPC)]
+
+data_outlier2 <- data_outlier[measuredElement == 9999 & Value > 1, ]
+
+bodyOutliers = paste("The Email contains a list of production outliers based on productivity. They have been detected and automatically corrected.",
+                    sep='\n')
+
+bodyProductivity = paste("The Email contains a list of productivity which are over 1.",
+                       sep='\n')
+
+sendMailAttachment(data_outlier, "outlierList", bodyOutliers)
+sendMailAttachment(data_outlier2, "productivity over 1", bodyProductivity)
+
 print('Plug-in Completed')
