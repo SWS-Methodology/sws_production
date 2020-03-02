@@ -118,11 +118,17 @@ if (imputation_selection == "CROP") {
     
     stopifnot(sum(unlist(livestock_triplet_lst_2) %in% unique(data$measuredElement))==3)
     
+    stopifnot(sum(c(livestock_triplet_lst_1bis$input,livestock_triplet_lst_1bis$output) %in% unique(data$measuredElement))==2)
+    
+    stopifnot(sum(unlist(livestock_triplet_lst_2bis) %in% unique(data$measuredElement))==3)
+    
     # if ((sum(c(livestock_triplet_lst_1$input,livestock_triplet_lst_1$output) %in% unique(data$measuredElement))!=2) |
     #   (sum(unlist(livestock_triplet_lst_2) %in% unique(data$measuredElement))!=3)) {
     #   message = paste("Please run the plug-in with all Livestock Items:", livestock_triplet_lst_1, livestock_triplet_lst_2, sep='\n')
     #   sendmailR::sendmail(from = "no-reply@fao.org", to = mailto, subject = "missing triplet", body = message, remove = TRUE)
     # }
+    
+    #to delete
     
 } else if (imputation_selection == "LIVESTOCK1000"){
     
@@ -278,8 +284,8 @@ Label_outlier <- function(data = data, element, type){
   data[, ratio:= get(Value) / Meanold]
   
   data[, c(outlier):= ifelse(abs(ratio-1) > THRESHOLD_IMPUTED & 
-                                 get(Protected) == FALSE, TRUE, FALSE) &
-           timePointYears %in% yearVals]
+                                 get(Protected) == FALSE &
+                                 timePointYears %in% yearVals, TRUE, FALSE) ]
   
   data[,`:=`(Meanold = NULL, ratio = NULL)]
   
@@ -376,6 +382,22 @@ correctInputOutput <- function(data = data,
   
   data_triplet <- dcast.data.table(data_triplet, geographicAreaM49 + measuredItemCPC + timePointYears ~ measuredElement, value.var = list('Value', 'Protected', 'EF'))
   
+  
+  input <- paste0("Value_", triplet$input)
+  output <- paste0("Value_", triplet$output)
+  productivity <- paste0("Value_", triplet$productivity)
+  
+  ef_input <- paste0("EF_", triplet$input)
+  ef_output <- paste0("EF_", triplet$output)
+  ef_productivity <- paste0("EF_", triplet$productivity)
+  
+  prot_input <- paste0("Protected_", triplet$input)
+  prot_output <- paste0("Protected_", triplet$output)
+  prot_productivity <- paste0("Protected_", triplet$productivity)
+  
+  #protect productivity if input and output are protected
+  data_triplet[get(prot_input) == TRUE & get(prot_output) == TRUE,c(prot_productivity):= TRUE]
+  
   Label_outlier(data = data_triplet, element = triplet$output, type = "output")
   compute_movav(data = data_triplet, element = triplet$output, type = "output")
   
@@ -386,13 +408,7 @@ correctInputOutput <- function(data = data,
   compute_movav(data = data_triplet, element = triplet$productivity, type = "productivity")
   
   
-  input <- paste0("Value_", triplet$input)
-  output <- paste0("Value_", triplet$output)
-  productivity <- paste0("Value_", triplet$productivity)
-  
-  ef_input <- paste0("EF_", triplet$input)
-  ef_output <- paste0("EF_", triplet$output)
-  ef_productivity <- paste0("EF_", triplet$productivity)
+ 
   
   data_triplet[get(ef_input) == TRUE, isOutlier_input:= TRUE]
   data_triplet[get(ef_output) == TRUE,isOutlier_output:= TRUE]
@@ -402,7 +418,7 @@ correctInputOutput <- function(data = data,
   # Number of Milk Animal cannot be higher than Live Animal: This module do not correct the Milk Animal number with the officil milk production
   # though, It is possible that will create an outlier for the Milk production Yield. The results of productivity outliers
   # will send to the user to control the official outlier on Milk Production so that they can change the number of Milk Animal, not higher than Live Animal.
-  if (factor == 1){
+  if (factor == 1 & imputation_selection=="MILK"){
     data_triplet[isOutlier_productivity==TRUE,c(productivity):= ifelse(movav_productivity<=1, movav_productivity, 1)]
   } else {
     data_triplet[isOutlier_productivity==TRUE,c(productivity):=movav_productivity]
@@ -569,6 +585,73 @@ complete_triplet<-function(data,triplets){
 }
 
 
+
+send_mail <- function(from = NA, to = NA, subject = NA,
+                      body = NA, remove = FALSE) {
+    
+    if (missing(from)) from <- 'no-reply@fao.org'
+    
+    if (missing(to)) {
+        if (exists('swsContext.userEmail')) {
+            to <- swsContext.userEmail
+        }
+    }
+    
+    if (is.null(to)) {
+        stop('No valid email in `to` parameter.')
+    }
+    
+    if (missing(subject)) stop('Missing `subject`.')
+    
+    if (missing(body)) stop('Missing `body`.')
+    
+    if (length(body) > 1) {
+        body <-
+            sapply(
+                body,
+                function(x) {
+                    if (file.exists(x)) {
+                        # https://en.wikipedia.org/wiki/Media_type 
+                        file_type <-
+                            switch(
+                                tolower(sub('.*\\.([^.]+)$', '\\1', basename(x))),
+                                txt  = 'text/plain',
+                                csv  = 'text/csv',
+                                png  = 'image/png',
+                                jpeg = 'image/jpeg',
+                                jpg  = 'image/jpeg',
+                                gif  = 'image/gif',
+                                xls  = 'application/vnd.ms-excel',
+                                xlsx = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                doc  = 'application/msword',
+                                docx = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                pdf  = 'application/pdf',
+                                zip  = 'application/zip',
+                                # https://stackoverflow.com/questions/24725593/mime-type-for-serialized-r-objects
+                                rds  = 'application/octet-stream'
+                            )
+                        
+                        if (is.null(file_type)) {
+                            stop(paste(tolower(sub('.*\\.([^.]+)$', '\\1', basename(x))),
+                                       'is not a supported file type.'))
+                        } else {
+                            return(sendmailR:::.file_attachment(x, basename(x), type = file_type))
+                        }
+                        
+                        if (remove) {
+                            unlink(x)
+                        }
+                    } else {
+                        return(x)
+                    }
+                }
+            )
+    } else if (!is.character(body)) {
+        stop('`body` should be either a string or a list.')
+    }
+    
+    sendmailR::sendmail(from, to, subject, as.list(body))
+}
 ## END fuction-----
 
 
@@ -623,8 +706,24 @@ if(imputation_selection=="LIVESTOCK") {
   dataEstOff <- dataEstOff[, names(data), with=FALSE]
   dataEstOff <- unique(dataEstOff, by=c(colnames(data)))
   data <- rbind(data,dataEstOff)
+  
+  
+  #Offtake rates for livestock in 1000 heads
+  dataEstOff2 <- data[measuredElement %in% c("5112","5316")]
+  dataEstOff2 <- dcast.data.table(dataEstOff2, geographicAreaM49 + measuredItemCPC + timePointYears ~ measuredElement, value.var = list('Value'))
+  dataEstOff2[, Value:= `5316`/`5112`]
+  dataEstOff2[, `5112`:= NULL]
+  dataEstOff2[, `5316`:= NULL]
+  dataEstOff2[, measuredElement:= 9999]
+  dataEstOff2[,flagObservationStatus:="I"]
+  dataEstOff2[,flagMethod:="i"]
+  dataEstOff2 <- dataEstOff2[, names(data), with=FALSE]
+  dataEstOff2 <- unique(dataEstOff2, by=c(colnames(data)))
+  data <- rbind(data, dataEstOff2)
 
 }
+
+#TO DELETE
 
 if(imputation_selection=="LIVESTOCK1000") {
   #Offtake rates for livestock in 1000 heads
@@ -723,7 +822,20 @@ if (imputation_selection == "CROP") {
   data <- update_slaughter(data = data, mappingData = mapping, sendTo = "parent", from = "child")
 
   data <- correctInputOutput(data, triplet = livestock_triplet_lst_1, partial = FALSE)
+  
+  # livestock type 2: stock in 1000 heads
+  data <- correctInputOutput(data, triplet = livestock_triplet_lst_1bis, partial = TRUE)
+  
+  data <- update_slaughter(data = data, mappingData = mapping, sendTo = "child", from = "parent")
+  
+  data <- correctInputOutput(data, triplet = livestock_triplet_lst_2bis, partial = FALSE, factor = 1000)
+  
+  data <- update_slaughter(data = data, mappingData = mapping, sendTo = "parent", from = "child")
+  
+  data <- correctInputOutput(data, triplet = livestock_triplet_lst_1bis, partial = FALSE)
 
+  
+  #to delete
 } else if(imputation_selection == "LIVESTOCK1000") {
 
   # livestock type 2: stock in 1000 heads
@@ -802,7 +914,13 @@ bodyOutliers = paste("The Email contains a list of production outliers based on 
 bodyProductivity = paste("The Email contains a list of productivity which are over 1.",
                        sep='\n')
 
-sendMailAttachment(data_outlier, "outlierList", bodyOutliers)
-sendMailAttachment(data_outlier2, "productivity over 1", bodyProductivity)
+
+# send_mail(data_outlier, "outlierList", body = bodyOutliers)
+# send_mail(data_outlier2, "productivity over 1", body = bodyProductivity)
+
+
+
+
+
 
 print('Plug-in Completed')
