@@ -138,6 +138,8 @@ tmp_file_synch<- file.path(TMP_DIR, paste0("Synchronize_SUA_APR_",commodity,".cs
 tmp_file_country<- file.path(TMP_DIR, paste0("Country_Stats_",commodity,".csv"))
 tmp_file_crostab<- file.path(TMP_DIR, paste0("Flag_comb_Freq_",commodity,".csv"))
 tmp_file_Ec_flag<- file.path(TMP_DIR, paste0("Freq_Ec_country_",commodity,".csv"))
+tmp_file_Ec_prod<- file.path(TMP_DIR, paste0("FirstTimeSeries-Ec_",commodity,".csv"))
+
 
 
 
@@ -169,12 +171,50 @@ if (commodity=="primary") {
 
 prod_sua<-prod_sua[measuredItemFbsSua %in% items & measuredElementSuaFbs %in% eleKeys,]
 prod_sua<-rbind(
-  prod_sua[measuredElementSuaFbs=="5510" & flagObservationStatus %in% c("","E","T"),],
+  prod_sua[measuredElementSuaFbs=="5510" & flagObservationStatus %in% c("","E","T","I"),],
   prod_sua[measuredElementSuaFbs %in% setdiff(eleKeys,"5510"),]
 )
 prod_sua<-rbind(
-  prod_sua[ measuredElementSuaFbs=="5510" & flagMethod %!in% c("i","t","e"),],
+  prod_sua[ measuredElementSuaFbs=="5510" & flagMethod %!in% c("i","t","e","c"),],
   prod_sua[measuredElementSuaFbs %in% setdiff(eleKeys,"5510"),]
+)
+
+
+#FAOSTAT COMMODITIES
+faostat_commodities<-c(
+"24310.01",	#Beer of barley
+"01921.02",	#Cotton lint
+"0143",	#Cottonseed
+"21700.02",	#Margarine, short
+"23540",	#Molasses
+"2166",	#Oil, coconut (copra)
+"2168",	#Oil, cottonseed
+"2162",	#Oil, groundnut
+"21691.12",	#Oil, linseed
+"21691.02",	#Oil, maize
+"2167",	#Oil, olive, virgin
+"2165",	#Oil, palm
+"21691.14",	#Oil, palm kernel
+"21641.01",	#Oil, rapeseed
+"21631.02",	#Oil, safflower
+"21691.07",	#Oil, sesame
+"2161",	#Oil, soybean
+"21631.01",	#Oil, sunflower
+"01491.02",	#Palm kernels
+"2351f",	#Sugar Raw Centrifugal
+"24212.02"	#Wine
+)
+
+prod_sua[measuredElementSuaFbs=="5510" & measuredItemFbsSua %!in% faostat_commodities,
+         ]
+
+
+prod_sua<-rbind(
+    prod_sua[measuredElementSuaFbs=="5510" & 
+                 flagObservationStatus %in% c("","E","T"),],
+    prod_sua[measuredElementSuaFbs=="5510" & 
+                 flagObservationStatus %in% c("I") & measuredItemFbsSua %in% faostat_commodities,],
+    prod_sua[measuredElementSuaFbs %in% setdiff(eleKeys,"5510"),]
 )
 
 prod_sua<-prod_sua[!(flagObservationStatus=="" & flagMethod==""),]
@@ -204,7 +244,7 @@ eleDim = Dimension(name = "measuredElement", keys =eleKeys)
 itemKeys=items
 
 itemDim = Dimension(name = "measuredItemCPC", keys = itemKeys)
-timeDim = Dimension(name = "timePointYears", keys = as.character(yearVals))
+timeDim = Dimension(name = "timePointYears", keys = as.character(2010:endYear))
 agKey = DatasetKey(domain = "agriculture", dataset = "aproduction",
                    dimensions = list(
                        geographicAreaM49 = geoDim,
@@ -220,6 +260,15 @@ prod_apr <- GetData(agKey)
 #Harmonize the colunm name
 names(prod_sua)<-names(prod_apr)
 
+past_data_check=copy(prod_apr)
+past_data_check=past_data_check[,median:=median(Value[timePointYears %in% 2010:2013],na.rm=TRUE),
+         by=c("geographicAreaM49","measuredElement","measuredItemCPC")]
+past_data_check[,to_synch:=ifelse(is.na(median),FALSE,TRUE)]
+past_data_check=unique(
+    past_data_check[,list(geographicAreaM49,measuredElement,measuredItemCPC,to_synch)]
+)
+
+
 #Select production data for the selected year range
 prod_apr<-prod_apr[timePointYears %in% yearVals & measuredElement %in% eleKeys,]
 prod_sua<-prod_sua[timePointYears %in% yearVals & measuredElement %in% eleKeys,]
@@ -231,13 +280,12 @@ prod_sua<-prod_sua[timePointYears %in% yearVals & measuredElement %in% eleKeys,]
 prod_apr[,Flag_apr:=paste0("[",flagObservationStatus,",",flagMethod,"]")]
 prod_sua[,Flag_sua:=paste0("[",flagObservationStatus,",",flagMethod,"]")]
 
-
-
 synch_data<-merge(
     prod_apr[,list(geographicAreaM49,
                    measuredElement,
                    measuredItemCPC,
-                   timePointYears,Value,
+                   timePointYears,
+                   Value,
                    Flag_apr)],
     prod_sua[,list(geographicAreaM49,
                    measuredElement,
@@ -254,8 +302,25 @@ synch_data<-merge(
     all.y = TRUE # keep all SUA data even missing in production env
 )
 
+synch_data<-merge(
+    synch_data,
+    past_data_check,
+    by=c("geographicAreaM49",
+         "measuredElement",
+         "measuredItemCPC"
+         ),
+    all.x = TRUE # keep all SUA data even missing in production env
+    
+)
+
+data_fistTime_Ec_prod=synch_data[is.na(to_synch) & Flag_sua=="[E,c]",]
+
 synch_data[,check:=dplyr::near(round(Value),round(prod_sua))]
-synch_data[is.na(check),check:=F]
+synch_data[is.na(check),check:=FALSE]
+synch_data[to_synch==FALSE & Flag_sua=="[E,c]",check:=TRUE]
+synch_data[is.na(to_synch) & Flag_sua=="[E,c]",check:=TRUE]
+synch_data[,to_synch:=NULL]
+
 data_analyse<-
   synch_data[measuredElement %in% eleKeys & check==FALSE,]
                     
@@ -263,6 +328,17 @@ data_analyse<-
 
 data_analyse=data_analyse[,`:=`(flagObservationStatus=NULL,flagMethod=NULL,check=NULL)]
 setnames(data_analyse,"Value","prod_apr")
+
+
+
+data_fistTime_Ec_prod<-
+    nameData(
+        "agriculture",
+        "aproduction",
+        data_fistTime_Ec_prod[,to_synch:=NULL]
+    )
+write.csv(data_fistTime_Ec_prod, tmp_file_Ec_prod)
+
 
 data_analyse <-
   nameData(
@@ -396,6 +472,7 @@ if (!CheckDebug()) {
              tmp_file_country,
              tmp_file_crostab,
              tmp_file_Ec_flag,
+             tmp_file_Ec_prod,
              tmp_file_plot_sua,
              tmp_file_plot_apr,
              tmp_file_plot_main
