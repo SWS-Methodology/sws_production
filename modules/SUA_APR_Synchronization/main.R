@@ -48,6 +48,9 @@ if(CheckDebug()){
 
 startYear = as.numeric(swsContext.computationParams$start_year)
 endYear = as.numeric(swsContext.computationParams$end_year)
+commodity = as.character(swsContext.computationParams$element)
+
+
 #geoM49 = swsContext.computationParams$geom49
 stopifnot(startYear <= endYear)
 yearVals = startYear:endYear
@@ -131,12 +134,14 @@ send_mail <- function(from = NA, to = NA, subject = NA,
 TMP_DIR <- file.path(tempdir(), USER)
 if (!file.exists(TMP_DIR)) dir.create(TMP_DIR, recursive = TRUE)
 
-tmp_file_synch<- file.path(TMP_DIR, paste0("Synchronize_SUA_APR",".csv"))
-tmp_file_country<- file.path(TMP_DIR, paste0("Country_Stats",".csv"))
+tmp_file_synch<- file.path(TMP_DIR, paste0("Synchronize_SUA_APR_",commodity,".csv"))
+tmp_file_country<- file.path(TMP_DIR, paste0("Country_Stats_",commodity,".csv"))
+tmp_file_crostab<- file.path(TMP_DIR, paste0("Flag_comb_Freq_",commodity,".csv"))
+tmp_file_Ec_flag<- file.path(TMP_DIR, paste0("Freq_Ec_country_",commodity,".csv"))
+
+
 
 Utilization_Table <- ReadDatatable("utilization_table_2018")
-primary_items <- Utilization_Table[primary_item == 'X', cpc_code]
-
 # Get production data from SUA domain
 
 sessionKey = swsContext.datasets[[2]]
@@ -144,14 +149,32 @@ datasetConfig = GetDatasetConfig(domainCode = sessionKey@domain,
                                  datasetCode = sessionKey@dataset)
 
 prod_sua <- GetData(sessionKey)
-prod_sua<-prod_sua[measuredItemFbsSua %in% primary_items,]
+
+
+if (commodity=="primary") {
+  items=intersect(Utilization_Table[primary_item == 'X', cpc_code],
+                  unique(prod_sua[,get("measuredItemFbsSua")]))
+  eleKeys="5510"
+} else if (commodity=="derived"){
+  
+  items=intersect(Utilization_Table[derived == 'X' | proxy_primary=='X', cpc_code],
+  unique(prod_sua[,get("measuredItemFbsSua")]))
+  eleKeys="5510"
+} else{
+  eleKeys=c("5520","5525","5016")
+  items=unique(prod_sua[measuredElementSuaFbs %in% eleKeys,get("measuredItemFbsSua")])
+
+}
+
+
+prod_sua<-prod_sua[measuredItemFbsSua %in% items & measuredElementSuaFbs %in% eleKeys,]
 prod_sua<-rbind(
   prod_sua[measuredElementSuaFbs=="5510" & flagObservationStatus %in% c("","E","T"),],
-  prod_sua[measuredElementSuaFbs %!in% c("5510"),]
+  prod_sua[measuredElementSuaFbs %in% setdiff(eleKeys,"5510"),]
 )
 prod_sua<-rbind(
   prod_sua[ measuredElementSuaFbs=="5510" & flagMethod %!in% c("i","t","e"),],
-  prod_sua[measuredElementSuaFbs %!in% c("5510"),]
+  prod_sua[measuredElementSuaFbs %in% setdiff(eleKeys,"5510"),]
 )
 
 prod_sua<-prod_sua[!(flagObservationStatus=="" & flagMethod==""),]
@@ -173,12 +196,12 @@ message("Pulling data from Agriculture Production")
 geoDim = Dimension(name = "geographicAreaM49", keys = selectedGEOCode)
 
 
-eleKeys = c("5510","5520","5525","5016")
+# eleKeys = c("5510","5520","5525","5016")
 
 ## Combine with single codes
 eleDim = Dimension(name = "measuredElement", keys =eleKeys)
 
-itemKeys=primary_items
+itemKeys=items
 
 itemDim = Dimension(name = "measuredItemCPC", keys = itemKeys)
 timeDim = Dimension(name = "timePointYears", keys = as.character(yearVals))
@@ -232,9 +255,9 @@ synch_data<-merge(
 )
 
 synch_data[,check:=dplyr::near(round(Value),round(prod_sua))]
-
+synch_data[is.na(check),check:=F]
 data_analyse<-
-  synch_data[measuredElement %in% c("5510") & check==FALSE,]
+  synch_data[measuredElement %in% eleKeys & check==FALSE,]
                     
 
 
@@ -257,12 +280,33 @@ write.csv(data_analyse, tmp_file_synch)
 write.csv(data_stat_by_country, tmp_file_country)
 
 data_plot_flag_apr=data_analyse[,list(frequency=.N),
-               by=c("Flag_apr")][!is.na(Flag_apr),]
+               by=c("Flag_apr")]
 data_plot_flag_sua=data_analyse[,list(frequency=.N),
-                by=c("Flag_sua")][!is.na(Flag_sua),]
+                by=c("Flag_sua")]
 
 data_plot_flag_main=data_analyse[,list(frequency=.N),
-                    by=c("Flag_sua,Flag_apr")][!is.na(Flag_apr),]
+                    by=c("Flag_sua","Flag_apr")]
+
+write.csv(data_plot_flag_main, tmp_file_crostab)
+
+
+data_flag_Ec=data_analyse[,list(frequency=.N),
+                                 by=c("geographicAreaM49","Flag_sua")][
+                                    Flag_sua=="[E,c]",]
+
+data_flag_Ec<-nameData("agriculture",
+                       "aproduction",
+                       data_flag_Ec)
+
+total<-data_flag_Ec[1]
+total$geographicAreaM49[1]=999
+total$geographicAreaM49_description[1]="All COuntries"
+total$Flag_sua="[E,c]"
+total$frequency=sum(data_flag_Ec$frequency,na.rm = TRUE)
+
+data_flag_Ec<-rbind(total,data_flag_Ec)
+
+write.csv(data_flag_Ec, tmp_file_Ec_flag)
 
 
 plot_apr<-ggplot(data_plot_flag_apr,aes(x=Flag_apr,y=frequency,fill=Flag_apr))+geom_col()+theme_classic()+
@@ -306,7 +350,7 @@ to_save_to_apr<-rbind(
                                Value=prod_sua,
                                flagObservationStatus,
                                flagMethod)],
-  synch_data[measuredElement %!in% c("5510"),][,list(geographicAreaM49,
+  synch_data[measuredElement %in% setdiff(eleKeys,"5510"),][,list(geographicAreaM49,
                                                             measuredElement,
                                                             measuredItemCPC,
                                                             timePointYears,
@@ -350,6 +394,8 @@ if (!CheckDebug()) {
     body = c(body_message,
              tmp_file_synch,
              tmp_file_country,
+             tmp_file_crostab,
+             tmp_file_Ec_flag,
              tmp_file_plot_sua,
              tmp_file_plot_apr,
              tmp_file_plot_main
