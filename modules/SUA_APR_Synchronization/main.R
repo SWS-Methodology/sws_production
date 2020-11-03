@@ -205,15 +205,17 @@ faostat_commodities<-c(
 "24212.02"	#Wine
 )
 
-prod_sua[measuredElementSuaFbs=="5510" & measuredItemFbsSua %!in% faostat_commodities,
-         ]
+# prod_sua[measuredElementSuaFbs=="5510" & measuredItemFbsSua %!in% faostat_commodities,
+#          ]
 
 
 prod_sua<-rbind(
-    prod_sua[measuredElementSuaFbs=="5510" & 
+    prod_sua[measuredElementSuaFbs=="5510" & commodity=="primary" & 
                  flagObservationStatus %in% c("","E","T"),],
-    prod_sua[measuredElementSuaFbs=="5510" & 
-                 flagObservationStatus %in% c("I") & measuredItemFbsSua %in% faostat_commodities,],
+    prod_sua[measuredElementSuaFbs=="5510" & commodity=="derived" & 
+                 measuredItemFbsSua %in% faostat_commodities,],
+    prod_sua[measuredElementSuaFbs=="5510" & commodity=="derived" & 
+                 flagObservationStatus %in% c("","T"),],
     prod_sua[measuredElementSuaFbs %in% setdiff(eleKeys,"5510"),]
 )
 
@@ -253,8 +255,15 @@ agKey = DatasetKey(domain = "agriculture", dataset = "aproduction",
                        timePointYears = timeDim)
 )
                           
+setnames(prod_sua,c("measuredElementSuaFbs","measuredItemFbsSua"),
+         c("measuredElement","measuredItemCPC"))
 
-prod_apr <- GetData(agKey)
+if (nrow(prod_sua)==0) {
+    prod_apr<-copy(prod_sua)
+}else{
+    prod_apr <- GetData(agKey)   
+}
+
 
 
 #Harmonize the colunm name
@@ -384,36 +393,49 @@ data_flag_Ec<-rbind(total,data_flag_Ec)
 
 write.csv(data_flag_Ec, tmp_file_Ec_flag)
 
+plot_apr<-ggplot()
 
-plot_apr<-ggplot(data_plot_flag_apr,aes(x=Flag_apr,y=frequency,fill=Flag_apr))+geom_col()+theme_classic()+
-  theme(legend.position = "none")+
-  labs(title="Flag typology of removed production data points",
-       subtitle=paste0("Year range=",startYear,"-",endYear),
-       y="Number of removed data point")+
-  geom_text(data=data_plot_flag_apr, aes(x = Flag_apr,y=frequency+25,
-                         label=paste0(frequency,"\n(",round(frequency/sum(frequency)*100,1),"%)")),
-            size=2.5)
+if(nrow(data_plot_flag_apr)>5){
+    
+    plot_apr<-ggplot(data_plot_flag_apr,aes(x=Flag_apr,y=frequency,fill=Flag_apr))+geom_col()+theme_classic()+
+        theme(legend.position = "none")+
+        labs(title="Flag typology of removed production data points",
+             subtitle=paste0("Year range=",startYear,"-",endYear),
+             y="Number of removed data point")+
+        geom_text(data=data_plot_flag_apr, aes(x = Flag_apr,y=frequency+25,
+                                               label=paste0(frequency,"\n(",round(frequency/sum(frequency)*100,1),"%)")),
+                  size=2.5)    
+}
+
 tmp_file_plot_apr <-file.path(TMP_DIR, paste0("PLOT_FLAG_APR", ".pdf"))
 ggsave(tmp_file_plot_apr, plot = plot_apr)
 
+plot_sua<-ggplot()
+if(nrow(data_plot_flag_sua)>5){
+    
+    plot_sua<-ggplot(data_plot_flag_sua,aes(x=Flag_sua,y=frequency,fill=Flag_sua))+geom_col()+theme_classic()+
+        theme(legend.position = "none")+
+        labs(title="Flag typology of synchronized sua data points",
+             subtitle=paste0("Year range=",startYear,"-",endYear),
+             y="Number of removed data point")+
+        geom_text(data=data_plot_flag_sua, aes(x = Flag_sua,y=frequency+35,
+                                               label=paste0(frequency,"\n(",round(frequency/sum(frequency)*100,1),"%)")),
+                  size=2.5)   
+}
 
-plot_sua<-ggplot(data_plot_flag_sua,aes(x=Flag_sua,y=frequency,fill=Flag_sua))+geom_col()+theme_classic()+
-  theme(legend.position = "none")+
-  labs(title="Flag typology of synchronized sua data points",
-       subtitle=paste0("Year range=",startYear,"-",endYear),
-       y="Number of removed data point")+
-  geom_text(data=data_plot_flag_sua, aes(x = Flag_sua,y=frequency+35,
-                         label=paste0(frequency,"\n(",round(frequency/sum(frequency)*100,1),"%)")),
-            size=2.5)
 tmp_file_plot_sua<-file.path(TMP_DIR, paste0("PLOT_SUA_FLAG", ".pdf"))
 ggsave(tmp_file_plot_sua, plot = plot_sua)
 
+plot_main<-ggplot()
 
-plot_main<-ggplot(data_plot_flag_main,aes(Flag_apr,frequency,fill=Flag_sua))+geom_col()+
-  theme_classic()+
-  labs(title="Flag typology of removed production data points",
-       subtitle=paste0("Year range=",startYear,"-",endYear),
-       y="Number of removed data point")
+if(nrow(data_plot_flag_main)>5){
+    
+    plot_main<-ggplot(data_plot_flag_main,aes(Flag_apr,frequency,fill=Flag_sua))+geom_col()+
+        theme_classic()+
+        labs(title="Flag typology of removed production data points",
+             subtitle=paste0("Year range=",startYear,"-",endYear),
+             y="Number of removed data point")    
+}
 
 tmp_file_plot_main <-file.path(TMP_DIR, paste0("PLOT_MAIN",".pdf"))
 ggsave(tmp_file_plot_main, plot = plot_main)
