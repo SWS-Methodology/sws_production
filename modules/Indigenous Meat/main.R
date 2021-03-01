@@ -1,102 +1,76 @@
-###### Code for creation of Indigenous Slaughtered and Indigenous Meat for 1991-2018
+# Create Indigenous Meat Production
+##'
+##' **Author: Giulia Piva**
+##'
+##' **Description:**
+##'
+##' This module is designed to harvest the data from Trade and Production domain and create Indigenous Meat Production as: (SLaughtered - Imported)*carcass weight
+##'
 
 
-
-suppressMessages({
-  library(data.table)
-  library(faosws)
-  library(faoswsFlag)
-  library(faoswsUtil)
-  # library(faoswsImputation)
-  # library(faoswsProduction)
-  library(faoswsProcessing)
-  library(faoswsEnsure)
-  library(magrittr)
-  library(dplyr)
-  library(sendmailR)
-  # library(faoswsStandardization)
-  
-})
+## load the library
+library(faosws)
+library(data.table)
+library(faoswsUtil)
+library(sendmailR)
+library(tidyr)
+library(faoswsFlag)
+library(faoswsProcessing)
+library(faoswsEnsure)
+library(magrittr)
+library(dplyr)
+library(sendmailR)
 
 
-
-
-R_SWS_SHARE_PATH <- Sys.getenv("R_SWS_SHARE_PATH")
+## set up for the test environment and parameters
+R_SWS_SHARE_PATH = Sys.getenv("R_SWS_SHARE_PATH")
 
 if(CheckDebug()){
+  message("Not on server, so setting up environment...")
   
   library(faoswsModules)
-  SETTINGS = ReadSettings("sws.yml")
+  SETT <- ReadSettings("sws.yml")
   
-  ## If you're not on the system, your settings will overwrite any others
-  R_SWS_SHARE_PATH = SETTINGS[["share"]]
-  
-  ## Define where your certificates are stored
-  SetClientFiles(SETTINGS[["certdir"]])
-  
-  ## Get session information from SWS. Token must be obtained from web interface
-  # SetClientFiles(dir = SETTINGS[["certdir"]])
+  #R_SWS_SHARE_PATH <- SETT[["share"]]  
+  ## Get SWS Parameters
+  SetClientFiles(dir = SETT[["certdir"]])
   GetTestEnvironment(
-    baseUrl = SETTINGS[["server"]],
-    token = SETTINGS[["token"]]
+    baseUrl = SETT[["server"]],
+    token = SETT[["token"]]
   )
-  
-  
-  
-  dir=getwd()
-  
 }
+
+startYear = as.numeric(swsContext.computationParams$startYear)
+endYear = as.numeric(swsContext.computationParams$endYear)
+geoM49 = swsContext.computationParams$geom49
+stopifnot(startYear <= endYear)
+yearVals = startYear:endYear
+
+##' Get data configuration and session
 sessionKey = swsContext.datasets[[1]]
 
+sessionCountries =
+  getQueryKey("geographicAreaM49", sessionKey)
 
-#####################################
-##keys for trade data
+geoKeys = GetCodeList(domain = "agriculture", dataset = "aproduction",
+                      dimension = "geographicAreaM49")[type == "country", code]
 
+##' Select the countries based on the user input parameter
+selectedGEOCode =
+  switch(geoM49,
+         "session" = sessionCountries,
+         "all" = geoKeys)
 
-timeKeys=as.character(c(1991:2018))
+################################################
+##### Harvest from Agricultural Production #####
+################################################
 
-geoKeys = GetCodeList(domain = "trade", dataset = "total_trade_cpc_m49", "geographicAreaM49")
-geoKeys = geoKeys[, code]
-
-geoDim <- Dimension(name = "geographicAreaM49", keys = geoKeys)
-
-eleDim <- Dimension(name = "measuredElementTrade", keys = c("5608", "5609", "5908", "5909"))
-
-
-itemKeys = GetCodeList(domain = "trade", dataset = "total_trade_cpc_m49", "measuredItemCPC")
-itemKeys = itemKeys[, code]
-
-itemDim <- Dimension(name = "measuredItemCPC", keys = itemKeys)
+message("Pulling data from Agricultural Production")
 
 
-timeDim <- Dimension(name = "timePointYears", keys = as.character(timeKeys))
+geoDim = Dimension(name = "geographicAreaM49", keys = selectedGEOCode)
 
-key = DatasetKey(domain = "trade", dataset = "total_trade_cpc_m49", dimensions = list(
-  geographicAreaM49 = geoDim,
-  measuredElementTrade = eleDim,
-  measuredItemCPC = itemDim,
-  timePointYears = timeDim
-))
-
-#pull trade data
-
-TradeData = GetData(key)
-
-
-
-##keys for Live animals production
-
-
-timeKeys=as.character(c(1991:2018))
-
-
-geoKeys = GetCodeList(domain = "agriculture", dataset = "aproduction", "geographicAreaM49")
-geoKeys = geoKeys[, code]
-
-geoDim <- Dimension(name = "geographicAreaM49", keys = geoKeys)
-
-
-eleDim <- Dimension(name = "measuredElement", keys = c("5315", "5316"))
+eleDim <- Dimension(name = "measuredElement", keys = c("5315", "5316","5417", "5424","54170","54240", "55100","5510"))
 
 
 itemKeys = GetCodeList(domain = "agriculture", dataset = "aproduction", "measuredItemCPC")
@@ -105,65 +79,53 @@ itemKeys = itemKeys[, code]
 itemDim <- Dimension(name = "measuredItemCPC", keys = itemKeys)
 
 
-timeDim <- Dimension(name = "timePointYears", keys = as.character(timeKeys))
+timeDim = Dimension(name = "timePointYears", keys = as.character(yearVals))
 
-key = DatasetKey(domain = "agriculture", dataset = "aproduction", dimensions = list(
+agKey = DatasetKey(domain = "agriculture", dataset = "aproduction",
+                   dimensions = list(
+                     geographicAreaM49 = geoDim,
+                     measuredElement = eleDim,
+                     measuredItemCPC = itemDim,
+                     timePointYears = timeDim)
+)
+agData = GetData(agKey)
+
+
+
+
+################################################
+##### Harvest from Trade #####
+################################################
+
+message("Pulling data from Trade")
+
+
+geoDim = Dimension(name = "geographicAreaM49", keys = selectedGEOCode)
+
+
+Trade_eleDim <- Dimension(name = "measuredElementTrade", keys = c("5608", "5609", "5908", "5909"))
+
+Tradekey = DatasetKey(domain = "trade", dataset = "total_trade_cpc_m49", dimensions = list(
   geographicAreaM49 = geoDim,
-  measuredElement = eleDim,
+  measuredElementTrade = Trade_eleDim,
   measuredItemCPC = itemDim,
   timePointYears = timeDim
 ))
 
 
-#pull Live Animal production data
+TradeData = GetData(Tradekey)
 
-ProductionData = GetData(key)
-
-#data for Meat
-
-##keys for Meat
-
-timeKeys=as.character(c(1991:2018))
+# Separate Meat data and Live Animals data
+ProductionData<-agData[measuredElement %in% c("5315", "5316")]
+MeatData <- agData[measuredElement %in% c("5417", "5424","54170","54240", "55100","5510")]
 
 
-geoKeys = GetCodeList(domain = "agriculture", dataset = "aproduction", "geographicAreaM49")
-geoKeys = geoKeys[, code]
-
-geoDim <- Dimension(name = "geographicAreaM49", keys = geoKeys)
-
-eleDim <- Dimension(name = "measuredElement", keys = c("5417", "5424","54170","54240", "55100","5510"))
-
-
-itemKeys = GetCodeList(domain = "agriculture", dataset = "aproduction", "measuredItemCPC")
-itemKeys = itemKeys[, code]
-
-itemDim <- Dimension(name = "measuredItemCPC", keys = itemKeys)
-
-
-timeDim <- Dimension(name = "timePointYears", keys = as.character(timeKeys))
-
-key = DatasetKey(domain = "agriculture", dataset = "aproduction", dimensions = list(
-  geographicAreaM49 = geoDim,
-  measuredElement = eleDim,
-  measuredItemCPC = itemDim,
-  timePointYears = timeDim
-))
-
-
-#pull meat data
-
-MeatData = GetData(key)
-
-
-
-##########################################################
-# Give labels
-
+# give labels
 ProductionData <-nameData("agriculture", "aproduction", ProductionData)
 TradeData<- nameData("trade", "total_trade_cpc_m49", TradeData)
 
 
-#Merge the two tables
+#Merge trade and Live animals data
 
 #prepare trade table for merging
 colnames(TradeData)<-c( "geographicAreaM49","geographicAreaM49_description", "measuredElement","measuredElement_description","measuredItemCPC",
@@ -175,7 +137,7 @@ colnames(TradeData)<-c( "geographicAreaM49","geographicAreaM49_description", "me
 IndigenTable<-rbind(ProductionData,TradeData)
 
 
-#create timeseries 1991-2018 for indigenous slaughtered animals
+#create timeseries for indigenous slaughtered animals
 
 IndigenTable<-rbind(IndigenTable, data.table(measuredElement="53200"),fill=T)
 
@@ -183,7 +145,7 @@ IndigenTable<-rbind(IndigenTable, data.table(measuredElement="53200"),fill=T)
 timeSeriesData<- as.data.table(expand.grid(measuredItemCPC = unique(IndigenTable$measuredItemCPC), 
                                            geographicAreaM49 = unique(IndigenTable$geographicAreaM49),
                                            measuredElement = unique(IndigenTable$measuredElement),
-                                           timePointYears = c(1991:2018)))
+                                           timePointYears = c(startYear:endYear)))
 
 timeSeriesData[, names(timeSeriesData) := lapply(.SD, as.character), .SDcols = names(timeSeriesData)]
 
@@ -212,20 +174,20 @@ IndigenTable2[ , Value := ifelse(measuredElement =="53200", sum(Value[measuredEl
 #correct too low (negative) values
 
 IndigenTable2[ , Value := ifelse((measuredElement =="53200" |measuredElement=="53210") & Value <=0 , 1, Value)]
-                                  
+
 
 
 ##correct too high values (where indigenous is higher than total slaughtered)
 
 
 IndigenTable2[ , Diff:= ifelse(Value[get("measuredElement") %in% c("53200")] > Value[get("measuredElement") %in% c("5315")], TRUE,FALSE),
-          by = list(`geographicAreaM49`, `measuredItemCPC`, `timePointYears`)] 
+               by = list(`geographicAreaM49`, `measuredItemCPC`, `timePointYears`)] 
 
 IndigenTable2[ , Diff2:= ifelse(Value[get("measuredElement") %in% c("53210")] > Value[get("measuredElement") %in% c("5316")], TRUE,FALSE),
                by = list(`geographicAreaM49`, `measuredItemCPC`, `timePointYears`)] 
 
 IndigenTable2[ , Value:= ifelse(measuredElement=="53200" & Diff== TRUE, Value[measuredElement=="5315"],Value),
-          by = list(`geographicAreaM49`, `measuredItemCPC`, `timePointYears`)]
+               by = list(`geographicAreaM49`, `measuredItemCPC`, `timePointYears`)]
 
 IndigenTable2[ , Value:= ifelse(measuredElement=="53210" & Diff2== TRUE, Value[measuredElement=="5316"],Value),
                by = list(`geographicAreaM49`, `measuredItemCPC`, `timePointYears`)]
@@ -233,21 +195,21 @@ IndigenTable2[ , Value:= ifelse(measuredElement=="53210" & Diff2== TRUE, Value[m
 
 ##Remove data where Slaughtered is NA or 0 
 IndigenTable2[ , Delete:= ifelse(measuredItemCPC %in% c("02132",
-                                                                          "02112",
-                                                                          "02121.01",
-                                                                          "02111",
-                                                                          "02123",
-                                                                          "02131",
-                                                                          "02133",
-                                                                          "02121.02",
-                                                                          "02192",
-                                                                          "02122",
-                                                                          "02140") & is.na(Value[measuredElement=="5315"]), TRUE, FALSE),
-                                 by= list(geographicAreaM49, measuredItemCPC, timePointYears)]
+                                                        "02112",
+                                                        "02121.01",
+                                                        "02111",
+                                                        "02123",
+                                                        "02131",
+                                                        "02133",
+                                                        "02121.02",
+                                                        "02192",
+                                                        "02122",
+                                                        "02140") & is.na(Value[measuredElement=="5315"]), TRUE, FALSE),
+               by= list(geographicAreaM49, measuredItemCPC, timePointYears)]
 
 IndigenTable2[ , Delete2:= ifelse(measuredItemCPC %in% c("02151", "02154", "02153", "02194", "02192.01","02191","02152") &
-                                                        is.na(Value[measuredElement=="5316"]) , TRUE, FALSE),
-                                   by= list(geographicAreaM49, measuredItemCPC, timePointYears)]
+                                    is.na(Value[measuredElement=="5316"]) , TRUE, FALSE),
+               by= list(geographicAreaM49, measuredItemCPC, timePointYears)]
 
 ###>Subset Indigenous slughtered 
 
@@ -265,21 +227,20 @@ Animals[ , flagMethod:= "i"]
 #Create Indigenous MEAT Production
 
 
-
 ###create two separate tables for big and small animals
 
 
 tableBIG<-Animals[measuredItemCPC %in% c("02132",
-                                              "02112",
-                                              "02121.01",
-                                              "02111",
-                                              "02123",
-                                              "02131",
-                                              "02133",
-                                              "02121.02",
-                                              "02192",
-                                              "02122",
-                                              "02140")]
+                                         "02112",
+                                         "02121.01",
+                                         "02111",
+                                         "02123",
+                                         "02131",
+                                         "02133",
+                                         "02121.02",
+                                         "02192",
+                                         "02122",
+                                         "02140")]
 
 tableSMALL<- Animals[measuredItemCPC %in% c("02151", "02154", "02153", "02194", "02192.01","02191","02152")]
 
@@ -325,14 +286,12 @@ if (nrow(towipe) > 0) {
 }
 
 
-#create timeseries 1991-2018 for indigenous meat
-
-# tableBIG<-rbind(tableBIG, data.table(measuredElement="55100"),fill=T)
+#create timeseries for indigenous meat for big animals
 
 timeSeriesData<- as.data.table(expand.grid(measuredItemCPC = unique(tableBIG$measuredItemCPC), 
                                            geographicAreaM49 = unique(tableBIG$geographicAreaM49),
                                            measuredElement = unique(tableBIG$measuredElement),
-                                           timePointYears = c(1991:2018)))
+                                           timePointYears = c(startYear:endYear)))
 
 timeSeriesData[, names(timeSeriesData) := lapply(.SD, as.character), .SDcols = names(timeSeriesData)]
 
@@ -341,6 +300,8 @@ timeSeriesData<- na.omit(timeSeriesData, cols=c("geographicAreaM49", "measuredIt
 
 #fill timeseries with values and na
 tableBIG <- merge(timeSeriesData, tableBIG, by=c("measuredElement","measuredItemCPC","timePointYears","geographicAreaM49"), all.x= TRUE)
+
+
 
 ##assign carcass weight value to indigenous carcass weight
 
@@ -396,15 +357,14 @@ if (nrow(towipe) > 0) {
 }
 
 
-#create timeseries 1991-2018 for indigenous meat
+#create timeseries for indigenous meat for small animals
 
-# tableSMALL<-rbind(tableSMALL, data.table(measuredElement="55100"),fill=T)
 
 
 timeSeriesData<- as.data.table(expand.grid(measuredItemCPC = unique(tableSMALL$measuredItemCPC), 
                                            geographicAreaM49 = unique(tableSMALL$geographicAreaM49),
                                            measuredElement = unique(tableSMALL$measuredElement),
-                                           timePointYears = c(1991:2018)))
+                                           timePointYears = c(startYear:endYear)))
 
 timeSeriesData[, names(timeSeriesData) := lapply(.SD, as.character), .SDcols = names(timeSeriesData)]
 
@@ -477,5 +437,4 @@ setDT(meat_toupload_FINAL)[, ("Value") := lapply(.SD, as.numeric), .SDcols = "Va
 
 SaveData(domain = "agriculture", dataset = "aproduction", data= meat_toupload_FINAL)
 
-
-
+print("Plug in completed")
