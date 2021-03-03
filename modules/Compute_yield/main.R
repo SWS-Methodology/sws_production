@@ -154,6 +154,8 @@ for (iter in seq(sessionItems)) {
         
         data_to_save <- data_to_save[!is.na(Value),]
         
+        data_to_save[flagObservationStatus %in% "M" & flagMethod %in% "c", flagMethod := "u"]
+        
         SaveData(domain = sessionKey@domain,
                  dataset = sessionKey@dataset,
                  data =  data_to_save)
