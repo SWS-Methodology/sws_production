@@ -433,7 +433,7 @@ setDT(meat_toupload_FINAL)[, ("geographicAreaM49") := lapply(.SD, as.character),
 setDT(meat_toupload_FINAL)[, ("Value") := lapply(.SD, as.numeric), .SDcols = "Value"]
 
 
-
+meat_toupload_FINAL[flagObservationStatus %in% "M" & flagMethod %in% "c", flagMethod := "u"]
 
 SaveData(domain = "agriculture", dataset = "aproduction", data= meat_toupload_FINAL)
 
