@@ -51,45 +51,45 @@ END_YEAR <- swsContext.computationParams$end_year
 #conversion factors
 
 #cattle
-conversion_cattles <- ReadDatatable("conversion_factors_cattles")[,-c("geographic_area"),with = FALSE]
+conversion_cattles <- ReadDatatable("conversion_factors_cattles")[,-c("geographic_area","comments"),with = FALSE]
 conversion_cattles[,live_animal := "02111"]
 
 #pigs
-conversion_pigs <- ReadDatatable("conversion_factors_pigs")[,-c("geographic_area"),with = FALSE]
+conversion_pigs <- ReadDatatable("conversion_factors_pigs")[,-c("geographic_area","comments"),with = FALSE]
 conversion_pigs[,live_animal := "02140"]
 
 #buffalos
 
-conversion_buffalos <- ReadDatatable("conversion_factors_buffalos")[,-c("geographic_area"),with = FALSE]
+conversion_buffalos <- ReadDatatable("conversion_factors_buffalos")[,-c("geographic_area","comments"),with = FALSE]
 conversion_buffalos[,live_animal := "02112"]
 
 
 #goats
 
-conversion_goats <- ReadDatatable("conversion_factors_goats")[,-c("geographic_area"),with = FALSE]
+conversion_goats <- ReadDatatable("conversion_factors_goats")[,-c("geographic_area","comments"),with = FALSE]
 conversion_goats[,live_animal := "02123"]
 
 
 #horses
 
-conversion_horses <- ReadDatatable("conversion_factors_horses")[,-c("geographic_area"),with = FALSE]
+conversion_horses <- ReadDatatable("conversion_factors_horses")[,-c("geographic_area","comments"),with = FALSE]
 conversion_horses[,live_animal := "02131"]
 
 
 #camels
 
-conversion_camels <- ReadDatatable("conversion_factors_camels")[,-c("geographic_area"),with = FALSE]
+conversion_camels <- ReadDatatable("conversion_factors_camels")[,-c("geographic_area","comments"),with = FALSE]
 conversion_camels[,live_animal := "02121.01"]
 
 
 #sheep
 
-conversion_sheep <- ReadDatatable("conversion_factors_sheep")[,-c("geographic_area"),with = FALSE]
+conversion_sheep <- ReadDatatable("conversion_factors_sheep")[,-c("geographic_area","comments"),with = FALSE]
 conversion_sheep[,live_animal := "02122"]
 
 #rabbits 
 
-conversion_rabbits <- ReadDatatable("conversion_factors_rabbits")[,-c("geographic_area"),with = FALSE]
+conversion_rabbits <- ReadDatatable("conversion_factors_rabbits")[,-c("geographic_area","comments"),with = FALSE]
 conversion_rabbits[,live_animal := "02191"]
 
 
