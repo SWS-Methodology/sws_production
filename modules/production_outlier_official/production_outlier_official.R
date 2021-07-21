@@ -5,6 +5,14 @@ library(data.table)
 library(tidyr)
 library(openxlsx)
 library(RcppRoll)
+library(faoswsProduction)
+library(faoswsFlag)
+library(faoswsImputation)
+library(faoswsProcessing)
+library(faoswsEnsure)
+library(magrittr)
+library(sendmailR)
+
 
 
 
@@ -13,15 +21,15 @@ start_time <- Sys.time()
 R_SWS_SHARE_PATH <- Sys.getenv("R_SWS_SHARE_PATH")
 
 if (CheckDebug()) {
-  R_SWS_SHARE_PATH <- "//hqlprsws1.hq.un.fao.org/sws_r_share"
-  
-  mydir <- "modules/production_oulier_official"
-  
-  SETTINGS <- faoswsModules::ReadSettings(file.path(mydir, "sws.yml"))
-  
-  SetClientFiles(SETTINGS[["certdir"]])
-  
-  GetTestEnvironment(baseUrl = SETTINGS[["server"]], token = SETTINGS[["token"]])
+    R_SWS_SHARE_PATH <- "//hqlprsws1.hq.un.fao.org/sws_r_share"
+    
+    mydir <- "modules/production_outlier_official/"
+    
+    SETTINGS <- faoswsModules::ReadSettings(file.path(mydir, "sws.yml"))
+    
+    SetClientFiles(SETTINGS[["certdir"]])
+    
+    GetTestEnvironment(baseUrl = SETTINGS[["server"]], token = SETTINGS[["token"]])
 }
 
 
@@ -29,17 +37,17 @@ if (CheckDebug()) {
 COUNTRY <- as.character(swsContext.datasets[[1]]@dimensions$geographicAreaM49@keys)
 
 COUNTRY_NAME <-
-  nameData(
-    "aproduction", "aproduction",
-    data.table(geographicAreaM49 = COUNTRY))$geographicAreaM49_description
+    nameData(
+        "aproduction", "aproduction",
+        data.table(geographicAreaM49 = COUNTRY))$geographicAreaM49_description
 
 USER <- regmatches(
-  swsContext.username,
-  regexpr("(?<=/).+$", swsContext.username, perl = TRUE)
+    swsContext.username,
+    regexpr("(?<=/).+$", swsContext.username, perl = TRUE)
 )
 
 dbg_print <- function(x) {
-  message(paste0("PROD (", COUNTRY, "): ", x))
+    message(paste0("PROD (", COUNTRY, "): ", x))
 }
 
 dbg_print("start parameters")
@@ -52,16 +60,21 @@ endYear <- as.numeric(swsContext.computationParams$endYear)
 
 stopifnot(startYear <= endYear)
 
-window <- as.numeric(5)
+window <- as.numeric(3)
 
+liveStockItems_table <-
+    getAnimalMeatMapping(R_SWS_SHARE_PATH = R_SWS_SHARE_PATH,
+                         onlyMeatChildren = FALSE)
+
+liveStockItems <- unique(liveStockItems_table$measuredItemParentCPC)
 #############################################
 #                                           #
-#   mancano intervallo e yearVal            #
+#   interval e yearVal                      #
 #                                           #
 #############################################
 
 YEARS <- startYear:endYear#2013-2019 sono gli anni che mi devo scaricare
-interval <- (startYear-window):(startYear-1)#2009-2013 sono gli anni per la media, da cambiare con Irina
+interval <- (startYear-window):(startYear-1)#2011-2015 sono gli anni per la media, da cambiare con Irina
 
 
 #TMP file
@@ -75,125 +88,440 @@ dbg_print("end parameters")
 dbg_print("start functions")
 ##########################################################SEND EMAIL FUNCTION#############################################
 `%!in%` <- Negate(`%in%`)
-#New version with unlink of the temporary folders integrated
-send_mail <- function(from = NA, to = NA, subject = NA,
-                      body = NA, remove = FALSE) {
-  
-  if (missing(from)) from <- 'no-reply@fao.org'
-  
-  if (missing(to)) {
-    if (exists('swsContext.userEmail')) {
-      to <- swsContext.userEmail
-    }
-  }
-  
-  if (is.null(to)) {
-    stop('No valid email in `to` parameter.')
-  }
-  
-  if (missing(subject)) stop('Missing `subject`.')
-  
-  if (missing(body)) stop('Missing `body`.')
-  
-  if (length(body) > 1) {
-    body <-
-      sapply(
-        body,
-        function(x) {
-          if (file.exists(x)) {
-            # https://en.wikipedia.org/wiki/Media_type 
-            file_type <-
-              switch(
-                tolower(sub('.*\\.([^.]+)$', '\\1', basename(x))),
-                txt  = 'text/plain',
-                csv  = 'text/csv',
-                png  = 'image/png',
-                jpeg = 'image/jpeg',
-                jpg  = 'image/jpeg',
-                gif  = 'image/gif',
-                xls  = 'application/vnd.ms-excel',
-                xlsx = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                doc  = 'application/msword',
-                docx = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                pdf  = 'application/pdf',
-                zip  = 'application/zip',
-                # https://stackoverflow.com/questions/24725593/mime-type-for-serialized-r-objects
-                rds  = 'application/octet-stream'
-              )
+
+######################COMPUTE Yield######################à##
+
+
+yield_function <- function(data_table) {
+    
+    data <- copy(data_table)
+    
+    datasetConfig <- GetDatasetConfig(domainCode = "agriculture",
+                                      datasetCode = "aproduction")
+    
+    processingParameters <-
+        productionProcessingParameters(datasetConfig = datasetConfig)
+    
+    
+    sessionItems <- c(unique(data$measuredItemCPC))
+    # sessionItems <-
+    #     getQueryKey("measuredItemCPC", session_key)
+    
+    final_data <- data.table(geographicAreaM49=character(), measuredElement=character(), measuredItemCPC=character(),
+                             timePointYears=character(),Value=numeric(),flagObservationStatus=character(),
+                             flagMethod=character())
+    
+    for (iter in seq(sessionItems)) {
+        
+        imputationProcess <- try({
             
-            if (is.null(file_type)) {
-              stop(paste(tolower(sub('.*\\.([^.]+)$', '\\1', basename(x))),
-                         'is not a supported file type.'))
-            } else {
-              res <- sendmailR:::.file_attachment(x, basename(x), type = file_type)
-              
-              if (remove == TRUE)    {
-                unlink(x)
-              }
-              
-              return(res)
+            set.seed(070416)
+            
+            currentItem <- sessionItems[iter]
+            
+            print(currentItem)
+            
+            liveStockItems <-
+                getAnimalMeatMapping(R_SWS_SHARE_PATH = R_SWS_SHARE_PATH,
+                                     onlyMeatChildren = FALSE)
+            
+            liveStockItems <- unique(liveStockItems$measuredItemParentCPC)
+            #if the code is an animal code: skip the iteration (they have no yield)
+            if(currentItem %in%liveStockItems) next 
+            ## Obtain the formula and remove indigenous and biological meat.
+            
+            # suppressMessages({
+            #     formulaTable <-
+            #         getProductionFormula(itemCode = currentItem) %>%
+            #         removeIndigenousBiologicalMeat(formula = .)
+            # })
+            
+            suppressWarnings(formulaTable <- removeIndigenousBiologicalMeat(getProductionFormula(currentItem)))
+            
+            if (nrow(formulaTable) > 1) {
+                stop("Imputation should only use one formula")
             }
-          } else {
-            return(x)
-          }
-        }
-      )
-  } else if (!is.character(body)) {
-    stop('`body` should be either a string or a list.')
-  }
-  
-  sendmailR::sendmail(from, to, subject, as.list(body))
+            
+            ## Create the formula parameter list
+            formulaParameters <-
+                with(formulaTable,
+                     productionFormulaParameters(datasetConfig = datasetConfig,
+                                                 productionCode = output,
+                                                 areaHarvestedCode = input,
+                                                 yieldCode = productivity,
+                                                 unitConversion = unitConversion)
+                )
+            
+            
+            
+            extractedData <-data[measuredItemCPC %in% currentItem,]
+            
+            extractedData <- extractedData[measuredElement %!in% formulaTable$productivity,]
+            
+            if (nrow(extractedData) == 0) {
+                message("Item : ", currentItem, " does not contain any data")
+                next
+            }
+            
+            if (nrow(extractedData[measuredElement %in% formulaTable$productivity & flagObservationStatus %in% "" 
+                                   & flagMethod %in% "q",]) > 0) {
+                message("Item : ", currentItem, " has a protected productivity value")
+                next
+            }
+            
+            processedData <-
+                extractedData %>%
+                preProcessing(data = .)    
+            
+            
+            processedData <-
+                denormalise(
+                    normalisedData = processedData,
+                    denormaliseKey = "measuredElement",
+                    fillEmptyRecords = TRUE
+                )
+            
+            
+            
+            processedData <-
+                createTriplet(
+                    data = processedData,
+                    formula = formulaTable
+                )
+            
+            
+            processedData[
+                get(formulaParameters$yieldObservationFlag) == processingParameters$missingValueObservationFlag,
+                ":="(
+                    c(formulaParameters$yieldMethodFlag),
+                    list(processingParameters$missingValueMethodFlag))
+                ]
+            
+            
+            if (typeof(processedData[, formulaParameters$yieldValue]) == "character"){
+                
+                processedData[, formulaParameters$yieldValue := NULL]
+                
+                processedData[, formulaParameters$yieldValue:= NA_real_]
+                
+            }
+            
+            
+            computed_Data = computeYield(processedData,
+                                         processingParameters = processingParameters,
+                                         formulaParameters = formulaParameters)
+            
+            
+            computed_Data <-
+                normalise(
+                    computed_Data,
+                    removeNonExistingRecords = FALSE
+                )
+            
+            final_data <- rbind(final_data,computed_Data[measuredElement %in% formulaTable$productivity,])
+            
+            #data_to_save <- data_to_save[!is.na(Value),]
+            
+            #data_to_save[flagObservationStatus %in% "M" & flagMethod %in% "c", flagMethod := "u"]
+            
+            # SaveData(domain = sessionKey@domain,
+            #          dataset = sessionKey@dataset,
+            #          data =  data_to_save)
+        })
+        
+    }
+    return(final_data)
 }
 
 
+######################### COMPUTE OFF TAKE RATES #######################
 
-# rollavg <- function(x, order = 5) {
-#   # order should be > 2
-#   stopifnot(order >= 5)
-#   
-#   non_missing <- sum(!is.na(x))
-#   
-#   # For cases that have just two non-missing observations
-#   order <- ifelse(order > 2 & non_missing == 2, 2, order)
-#   
-#   if (non_missing == 1) {
-#     x[is.na(x)] <- na.omit(x)[1]
-#   } else if (non_missing >= order) {
-#     n <- 1
-#     while(any(is.na(x)) & n <= 10) { # 10 is max tries
-#       movav <- suppressWarnings(RcppRoll::roll_mean(x, order, fill = 'extend', align = 'right'))
-#       movav <- data.table::shift(movav)
-#       x[is.na(x)] <- movav[is.na(x)]
-#       n <- n + 1
-#     }
-#     
-#     x <- zoo::na.fill(x, 'extend')
-#   }
-#   
-#   return(x)
-# }
+offtake_function <- function(data_table) {
+    
+    data <- copy(data_table)
+    
+    datasetConfig <- GetDatasetConfig(domainCode = "agriculture",
+                                      datasetCode = "aproduction")
+    
+    processingParameters <-
+        productionProcessingParameters(datasetConfig = datasetConfig)
+    
+    
+    sessionItems <- c(unique(data$measuredItemCPC))
+    # sessionItems <-
+    #     getQueryKey("measuredItemCPC", session_key)
+    
+    final_data <- data.table(geographicAreaM49=character(), measuredElement=character(), measuredItemCPC=character(),
+                             timePointYears=character(),Value=numeric(),flagObservationStatus=character(),
+                             flagMethod=character())
+    
+    for (iter in seq(sessionItems)) {
+        
+        imputationProcess <- try({
+            
+            set.seed(070416)
+            
+            currentItem <- sessionItems[iter]
+            
+            print(currentItem)
+            
+            
+            ## Obtain the formula and remove indigenous and biological meat.
+            
+            
+            suppressWarnings(formulaTable <- removeIndigenousBiologicalMeat(getProductionFormula(currentItem)))
+            
+            formulaTable$productivity <- "5077"
+            
+            if (nrow(formulaTable) > 1) {
+                stop("Imputation should only use one formula")
+            }
+            
+            ## Create the formula parameter list
+            formulaParameters <-
+                with(formulaTable,
+                     productionFormulaParameters(datasetConfig = datasetConfig,
+                                                 productionCode = output,
+                                                 areaHarvestedCode = input,
+                                                 yieldCode = productivity,
+                                                 unitConversion = unitConversion)
+                )
+            
+            #New code for the off take rate. We add it as the productivity element in live animals
+            
+            
+            extractedData <-data[measuredItemCPC %in% currentItem,]
+            
+            extractedData <- extractedData[measuredElement %!in% formulaTable$productivity,]
+            
+            if (nrow(extractedData) == 0) {
+                message("Item : ", currentItem, " does not contain any data")
+                next
+            }
+            
+            if (nrow(extractedData[measuredElement %in% formulaTable$productivity & flagObservationStatus %in% "" 
+                                   & flagMethod %in% "q",]) > 0) {
+                message("Item : ", currentItem, " has a protected productivity value")
+                next
+            }
+            
+            processedData <-
+                extractedData %>%
+                preProcessing(data = .)    
+            
+            
+            processedData <-
+                denormalise(
+                    normalisedData = processedData,
+                    denormaliseKey = "measuredElement",
+                    fillEmptyRecords = TRUE
+                )
+            
+            
+            
+            processedData <-
+                createTriplet(
+                    data = processedData,
+                    formula = formulaTable
+                )
+            
+            
+            processedData[
+                get(formulaParameters$yieldObservationFlag) == processingParameters$missingValueObservationFlag,
+                ":="(
+                    c(formulaParameters$yieldMethodFlag),
+                    list(processingParameters$missingValueMethodFlag))
+                ]
+            
+            
+            if (typeof(processedData[, formulaParameters$yieldValue]) == "character"){
+                
+                processedData[, formulaParameters$yieldValue := NULL]
+                
+                processedData[, formulaParameters$yieldValue:= NA_real_]
+                
+            }
+            
+            ## Data quality check
+            suppressMessages({
+                ensureProductionInputs(processedData,
+                                       processingParameters = processingParameters,
+                                       formulaParameters = formulaParameters,
+                                       returnData = FALSE,
+                                       normalised = FALSE)
+            })
+            
+            
+            missingYield =
+                is.na(processedData[[formulaParameters$yieldValue]])&
+                processedData[[formulaParameters$yieldMethodFlag]]!="-"
+            nonMissingProduction =
+                !is.na(processedData[[formulaParameters$productionValue]]) &
+                processedData[[formulaParameters$productionObservationFlag]] != processingParameters$missingValueObservationFlag
+            nonMissingAreaHarvested =
+                !is.na(processedData[[formulaParameters$areaHarvestedValue]]) &
+                processedData[[formulaParameters$areaHarvestedObservationFlag]] != processingParameters$missingValueObservationFlag
+            
+            feasibleFilter =
+                missingYield &
+                nonMissingProduction &
+                nonMissingAreaHarvested
+            
+            nonZeroProductionFilter =
+                (processedData[[formulaParameters$productionValue]] != 0)
+            
+            
+            #computation of the off take rate
+            processedData[feasibleFilter, `:=`(c(formulaParameters$yieldValue),
+                                               computeRatio(get(formulaParameters$areaHarvestedValue),
+                                                            get(formulaParameters$productionValue)))]
+            
+            
+            
+            processedData[feasibleFilter & nonZeroProductionFilter,
+                          `:=`(c(formulaParameters$yieldObservationFlag),
+                               aggregateObservationFlag(get(formulaParameters$productionObservationFlag),
+                                                        get(formulaParameters$areaHarvestedObservationFlag)))]
+            
+            
+            processedData[feasibleFilter & !nonZeroProductionFilter,
+                          `:=`(c(formulaParameters$yieldObservationFlag),
+                               processingParameters$missingValueObservationFlag)]
+            
+            processedData[feasibleFilter & !nonZeroProductionFilter,
+                          `:=`(c(formulaParameters$yieldMethodFlag),
+                               processingParameters$missingValueMethodFlag)]
+            
+            ## Assign method flag i to that ratio with areaHarvested!=0
+            processedData[feasibleFilter & nonZeroProductionFilter,
+                          `:=`(c(formulaParameters$yieldMethodFlag),
+                               processingParameters$balanceMethodFlag)]
+            
+            
+            ## If  Prod or Area Harvested is (M,-) also yield should be flagged as (M,-)
+            
+            MdashProduction =  processedData[,get(formulaParameters$productionObservationFlag)==processingParameters$missingValueObservationFlag
+                                             & get(formulaParameters$productionMethodFlag)=="-"]
+            
+            blockFilterProd= MdashProduction & missingYield
+            
+            processedData[blockFilterProd ,
+                          `:=`(c(formulaParameters$yieldValue,formulaParameters$yieldObservationFlag,formulaParameters$yieldMethodFlag),
+                               list(NA_real_,processingParameters$missingValueObservationFlag, "-"))]
+            
+            
+            MdashAreaHarvested= processedData[,get(formulaParameters$areaHarvestedObservationFlag)==processingParameters$missingValueObservationFlag
+                                              & get(formulaParameters$areaHarvestedMethodFlag)=="-"]
+            
+            blockFilterAreaHarv= MdashAreaHarvested & missingYield
+            
+            processedData[blockFilterAreaHarv ,
+                          `:=`(c(formulaParameters$yieldValue,formulaParameters$yieldObservationFlag,formulaParameters$yieldMethodFlag),
+                               list(NA_real_,processingParameters$missingValueObservationFlag, "-"))]
+            
+            #Normalize the computed data
+            
+            computed_Data <-
+                normalise(
+                    processedData,
+                    removeNonExistingRecords = FALSE
+                )
+            
+            final_data <- rbind(final_data,computed_Data[measuredElement %in% formulaTable$productivity,])
+            
+            #data_to_save <- data_to_save[!is.na(Value),]
+            
+            #data_to_save[flagObservationStatus %in% "M" & flagMethod %in% "c", flagMethod := "u"]
+            
+            # SaveData(domain = sessionKey@domain,
+            #          dataset = sessionKey@dataset,
+            #          data =  data_to_save)
+        })
+        
+    }
+    return(final_data)
+}
+######################SEND EMAIL############################
+#New version with unlink of the temporary folders integrated
+send_mail <- function(from = NA, to = NA, subject = NA,
+                      body = NA, remove = FALSE) {
+    
+    if (missing(from)) from <- 'no-reply@fao.org'
+    
+    if (missing(to)) {
+        if (exists('swsContext.userEmail')) {
+            to <- swsContext.userEmail
+        }
+    }
+    
+    if (is.null(to)) {
+        stop('No valid email in `to` parameter.')
+    }
+    
+    if (missing(subject)) stop('Missing `subject`.')
+    
+    if (missing(body)) stop('Missing `body`.')
+    
+    if (length(body) > 1) {
+        body <-
+            sapply(
+                body,
+                function(x) {
+                    if (file.exists(x)) {
+                        # https://en.wikipedia.org/wiki/Media_type 
+                        file_type <-
+                            switch(
+                                tolower(sub('.*\\.([^.]+)$', '\\1', basename(x))),
+                                txt  = 'text/plain',
+                                csv  = 'text/csv',
+                                png  = 'image/png',
+                                jpeg = 'image/jpeg',
+                                jpg  = 'image/jpeg',
+                                gif  = 'image/gif',
+                                xls  = 'application/vnd.ms-excel',
+                                xlsx = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                                doc  = 'application/msword',
+                                docx = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                                pdf  = 'application/pdf',
+                                zip  = 'application/zip',
+                                # https://stackoverflow.com/questions/24725593/mime-type-for-serialized-r-objects
+                                rds  = 'application/octet-stream'
+                            )
+                        
+                        if (is.null(file_type)) {
+                            stop(paste(tolower(sub('.*\\.([^.]+)$', '\\1', basename(x))),
+                                       'is not a supported file type.'))
+                        } else {
+                            res <- sendmailR:::.file_attachment(x, basename(x), type = file_type)
+                            
+                            if (remove == TRUE)    {
+                                unlink(x)
+                            }
+                            
+                            return(res)
+                        }
+                    } else {
+                        return(x)
+                    }
+                }
+            )
+    } else if (!is.character(body)) {
+        stop('`body` should be either a string or a list.')
+    }
+    
+    sendmailR::sendmail(from, to, subject, as.list(body))
+}
 ############################################################END SEND EMAIL##########################################
 dbg_print("end functions")
-#COUNTRY already defined
-#YEARS already defined
 
-#ITEMS 
-#-take the codelist item from the server 
-#take them from the session
-#take from the data table list
-#Dimension("measuredItemCPC", GetCodeList("aproduction", "aproduction", "measuredItemCPC")$code)
-#ITEMS <- swsContext.datasets[[1]]@dimensions$measuredItemCPC@keys
-
-#change with read data table from sws
-# cpc_cluster <- read.xlsx("C:/Users/lombardi/Documents/Livia/faoswsProduction/modules/outlierDetection/CPC_cluster.xlsx")
-# cpc_cluster <- as.data.table(cpc_cluster)
 dbg_print("Getting data")
 
+
+#Items needed:
 cpc_cluster <- ReadDatatable("cpc_validation_production")
-
-
-
-#ELEMENTS let get the triplets needed:
+proxy_cluster <- ReadDatatable("utilization_table_2018")
+proxy_cluster <- proxy_cluster[proxy_primary %in% "X",]
+#ELEMENTS: let get the triplets needed:
 #o tutti da chiave
 #measuredElement = Dimension("measuredElement", GetCodeList("aproduction", "aproduction", "measuredElement")$code)
 #Da prendere poi unique(ELEMENTS) in the POST CALL
@@ -206,122 +534,62 @@ ELEMENTS <- c("5312","5510","5421",#crops: Area Harvested, Production, Yields
               "5318","5510","5417",#Milk: Milk animals, Production, Yields/Carcass
               "5313","5424","5510","5513")#EGGS: Laying, Yelds/Carcass, Production t, Production 1000. Yield: 5510/5313
 
-#sessionKey = swsContext.datasets[[1]]
-#Creating the key to get data
-production_key = DatasetKey(domain = "aproduction", 
-                             dataset = "aproduction", 
-                             dimensions = list(measuredItemCPC = Dimension("measuredItemCPC", unique(cpc_cluster$cpc)), 
-                                               measuredElement = Dimension("measuredElement", unique(ELEMENTS)),
-                                               geographicAreaM49 = Dimension("geographicAreaM49", as.vector(COUNTRY)),
-                                               timePointYears = Dimension("timePointYears", as.character(YEARS))))
+#Session data
+#c("5421","5417","5424","5422")
 
+session_key <- swsContext.datasets[[1]]
 
-#call data
-data <- GetData(production_key)
+#session_key@dimensions$timePointYears@keys <- as.character(interval[1]:endYear)
+#session_key@dimensions$measuredItemCPC@keys <- unique(cpc_cluster$cpc)
+#session_key@dimensions$measuredElement@keys <- unique(ELEMENTS)
+#session_key@dimensions$geographicAreaM49@keys <- COUNTRY
+
+data <- GetData(session_key)
+
+data_backup <- copy(data)
 
 data <- as.data.table(data)
 
-#get fag table
-flagValidTable <- ReadDatatable("valid_flags")
-flagValidTable <- flagValidTable[is.na(flagObservationStatus), flagObservationStatus := ""]
+data <- data[measuredElement %in% unique(ELEMENTS),]
+data <- data[measuredItemCPC %in% c(unique(cpc_cluster$cpc), unique(proxy_cluster$cpc_code)),]
 
+# keep only protected data
+data <- data[flagObservationStatus %in% "" | flagObservationStatus %in% "T" | flagMethod %in% "f",]
 
-#take a copy as backup
-data_prod <- copy(data)
+# get free of protected data that are not in the interest range of year (startyear:endyear)
+# this passage is useful to discard the data point that are still in the dataset but they don t have new info from 
+# questionnaires. I will attach later from the dataset backup the items left in the dataset to have the mean reference 
 
-dbg_print("Got data")
-                                  ######################################
-                                  #                                    #
-                                  #                                    #
-                                  #           CROPS YIELD              #
-                                  #                                    #
-                                  #                                    #
-                                  ######################################
+protected_current <- data[, .SD[timePointYears %in% as.character(startYear:endYear)],
+                        by= c("geographicAreaM49","measuredElement", "measuredItemCPC")]
 
-dbg_print("Starting Yield calculation")
+combination_of_interest <- unique(protected_current[, .(measuredItemCPC, measuredElement)])
 
-crops_data <- data_prod[measuredElement %in% c("5312","5510"),]
+data_of_interest <- data.table(geographicAreaM49=character(), measuredElement=character(), measuredItemCPC=character(),
+                               timePointYears=character(),Value=numeric(),flagObservationStatus=character(),
+                               flagMethod=character())
 
-crops_data <- dcast(crops_data, measuredItemCPC + geographicAreaM49 + timePointYears ~ measuredElement, 
-                  value.var = c("Value"))
-
-if("5510" %in% colnames(crops_data) & "5312" %in% colnames(crops_data)){
-  crops_data <- crops_data[, `5421` := `5510`/`5312`]
-  
-  crops_data <- crops_data[!(is.na(`5421`)) & !(is.nan(`5421`)) & !(is.infinite(`5421`)),]
-  
-  
-  crops_data <- merge(crops_data,
-                      data_prod[measuredElement %in% "5510", 
-                                list(geographicAreaM49,measuredItemCPC, timePointYears, 
-                                     flagO_P = flagObservationStatus,
-                                     flagM_P = flagMethod)], 
-                      by = c("geographicAreaM49", "timePointYears", "measuredItemCPC"))
-  
-  crops_data <- merge(crops_data,
-                      data_prod[measuredElement %in% "5312", 
-                                list(geographicAreaM49,measuredItemCPC, timePointYears, 
-                                     flagO_H = flagObservationStatus,
-                                     flagM_H = flagMethod)], 
-                      by = c("geographicAreaM49", "timePointYears", "measuredItemCPC"))
-  
-  crops_data <- crops_data[, `:=` (flagObservationStatus = NA_character_, flagMethod = NA_character_)]
-  
-  #insert official flag to yield where both official
-  crops_data <- crops_data[flagO_P %in% "" &
-                           flagO_H %in% "", 
-                           `:=` (flagObservationStatus = "", flagMethod = "i") ]
-  
-  #insert imputed flag to yield where both imputed
-  crops_data <- crops_data[flagO_P %in% c("I","E") &
-                           flagO_H %in% c("I","E"), 
-                           `:=` (flagObservationStatus = "I", flagMethod = "i") ]
-  
-  #insert t flag to yield where are Tp
-  crops_data <- crops_data[flagO_P %in% "T" &
-                           flagO_H %in% "T", 
-                           `:=` (flagObservationStatus = "T", flagMethod = "i") ]
-  
-  #insert flag to yeld manual estimated
-  crops_data <- crops_data[flagO_P %in% "E" & flagM_P %in% "f" &
-                           flagO_H %in% "E" & flagM_H %in% "f", 
-                           `:=` (flagObservationStatus = "E", flagMethod = "i") ]
-  
-  #insert flag one at leats one of the 2 element is imputed
-  crops_data <- crops_data[flagO_P %in% "" & flagO_H %in% "I" |
-                           flagO_P %in% "I" & flagO_H %in% "", 
-                           `:=` (flagObservationStatus = "I", flagMethod = "i") ]
-  
-  crops_data <- crops_data[flagO_P %in% "" & flagO_H %in% "T" |
-                           flagO_P %in% "T" & flagO_H %in% "", 
-                               `:=` (flagObservationStatus = "T", flagMethod = "i") ]
-  
-  crops_data <- crops_data[flagO_P %in% "" & flagO_H %in% "E" |
-                                 flagO_P %in% "E" & flagO_H %in% "", 
-                               `:=` (flagObservationStatus = "E", flagMethod = "i") ]
-  #reorganize data in sws format
-  crops_yield = crops_data[, list(geographicAreaM49, measuredElement = "5421", measuredItemCPC,
-                                 timePointYears,Value = `5421` ,flagObservationStatus,flagMethod)]
-  
-  #bind with original dataset and removing the previous yield before attaching
-  tot_crops <- rbind(data_prod[! crops_yield , on = c("measuredElement","geographicAreaM49",
-                                                   "timePointYears", "measuredItemCPC")], crops_yield)
-
-}else{
-  tot_crops <- data_prod
+for (i in 1:length(c(combination_of_interest)$measuredItemCPC)){
+    data_of_interest <- rbind(data_of_interest,
+                              data_backup[measuredItemCPC %in% c(combination_of_interest)$measuredItemCPC[i]&
+                                              measuredElement %in% c(combination_of_interest)$measuredElement[i],] )
+    i = i+1
 }
-                                      ######################################
-                                      #                                    #
-                                      #                                    #
-                                      #         LIVESTOCK YIELD            #
-                                      #                                    #
-                                      #                                    #
-                                      ######################################
 
-#1) Saving Animal slaughtering under Meat slaughterings
 
-copy_for_big_animals <- data_prod[measuredElement %in% "5315"]
-copy_for_small_animals <- data_prod[measuredElement %in% "5316"]
+
+clean_data <- data_of_interest[, checkFlag := ifelse(timePointYears %in% as.character(startYear:endYear) &
+                            flagObservationStatus %!in% c("","T","E"), TRUE,FALSE)]
+
+
+clean_data <- clean_data[checkFlag == FALSE,]
+
+
+clean_data[, checkFlag := NULL]
+
+#I should copy the slaughtered values of animals under the meat. SO I keep the meats in the triplet dataset
+copy_for_big_animals <- clean_data[measuredElement %in% "5315"]
+copy_for_small_animals <- clean_data[measuredElement %in% "5316"]
 
 copy_for_big_animals[, c("measuredElement"):=NULL]
 copy_for_big_animals[, measuredElement := "5320"] 
@@ -329,14 +597,8 @@ copy_for_big_animals[, measuredElement := "5320"]
 copy_for_small_animals[, c("measuredElement"):=NULL]
 copy_for_small_animals[, measuredElement := "5321"]
 
-# copy_for_big_animals[, flagObservationStatus := ""]
-# copy_for_big_animals[, flagMethod := "c"]
-# 
-# copy_for_small_animals[, flagObservationStatus := ""]
-# copy_for_small_animals[, flagMethod := "c"]
 
 copy_for_animals <- rbind(copy_for_big_animals,copy_for_small_animals)
-#
 
 mapping_for_animals <- data.table("meat_code" = c("21111.01","21115","21116","21113.01","21121","21122","21124","21112","21123","21118.01","21118.02","21118.03","21117.01","21114","21119.01","21170.01"),
                                   "animal_code"= c("02111","02122","02123","02140","02151","02154","02152","02112","02153","02131","02132","02133","02121.01","02191","02192.01","02194"))
@@ -344,866 +606,815 @@ mapping_for_animals <- data.table("meat_code" = c("21111.01","21115","21116","21
 copy_for_animals <- merge(copy_for_animals, mapping_for_animals, by.x = "measuredItemCPC",
                           by.y = "animal_code", all.x = T)
 
+
 copy_for_animals[, c("measuredItemCPC"):=NULL]
 
 setnames(copy_for_animals, "meat_code","measuredItemCPC")
 
 copy_for_animals[, flagMethod := "c"]
 
-data_prod_2 <- rbind(tot_crops[! copy_for_animals , on = c("measuredElement","geographicAreaM49",
-                                                    "timePointYears", "measuredItemCPC")], copy_for_animals)
+
+clean_data <- rbind(clean_data[! copy_for_animals , on = c("measuredElement","geographicAreaM49",
+                                                           "timePointYears", "measuredItemCPC")], copy_for_animals)
+
+# let s separate not live animals and live animals data 
+
+not_livestock_data <- clean_data[measuredItemCPC %!in% liveStockItems,]
 
 
-#2) Calculate Meat Yield for big animals
+livestock_data <- clean_data[measuredItemCPC %in% liveStockItems,]
 
-bigmeat_data <- data_prod_2[measuredElement %in% c("5320","5510"),]
+#filter dataset for items which have both input and output element, so that we can compute the yield
 
-bigmeat_data <- dcast(bigmeat_data, measuredItemCPC + geographicAreaM49 + timePointYears ~ measuredElement, 
-                    value.var = c("Value"))
+#############################################################################
+#############################################################################
+#     NOT LIVESTOCK DATA COMPLETE TRIPLET EXTRACTION & YIELD COMPUTATION    #
+#############################################################################
+#############################################################################
 
-if("5510" %in% colnames(bigmeat_data) & "5320" %in% colnames(bigmeat_data)){
-  
-  bigmeat_data <- bigmeat_data[, `5417` := (`5510`)*1000/`5320`] 
-  
-  bigmeat_data <- bigmeat_data[!(is.na(`5417`)) & !(is.nan(`5417`)) & !(is.infinite(`5417`)),]
-  
-  
-  bigmeat_data <- merge(bigmeat_data,
-                        data_prod_2[measuredElement %in% "5510", 
-                                list(geographicAreaM49,measuredItemCPC, timePointYears, 
-                                     flagO_P = flagObservationStatus,
-                                     flagM_P = flagMethod)], 
-                      by = c("geographicAreaM49", "timePointYears", "measuredItemCPC"))
-  
-  bigmeat_data <- merge(bigmeat_data,
-                        data_prod_2[measuredElement %in% "5320", 
-                                list(geographicAreaM49,measuredItemCPC, timePointYears, 
-                                     flagO_S = flagObservationStatus,
-                                     flagM_S = flagMethod)], 
-                      by = c("geographicAreaM49", "timePointYears", "measuredItemCPC"))
-  
-  bigmeat_data <- bigmeat_data[, `:=` (flagObservationStatus = NA_character_, flagMethod = NA_character_)]
-  
-  #insert official flag to yield where both official
-  bigmeat_data <- bigmeat_data[flagO_P %in% "" &
-                             flagO_S %in% "", 
-                           `:=` (flagObservationStatus = "", flagMethod = "i") ]
-  
-  #insert imputed flag to yield where both imputed
-  bigmeat_data <- bigmeat_data[flagO_P %in% c("I","E") &
-                             flagO_S %in% c("I","E"), 
-                           `:=` (flagObservationStatus = "I", flagMethod = "i") ]
-  
-  #insert t flag to yield where are Tp
-  bigmeat_data <- bigmeat_data[flagO_P %in% "T" &
-                             flagO_S %in% "T", 
-                           `:=` (flagObservationStatus = "T", flagMethod = "i") ]
-  
-  #insert flag to yeld manual estimated
-  bigmeat_data <- bigmeat_data[flagO_P %in% "E" & flagM_P %in% "f" &
-                             flagO_S %in% "E" & flagM_S %in% "f", 
-                           `:=` (flagObservationStatus = "E", flagMethod = "i") ]
-  
-  #insert flag one at leats one of the 2 element is imputed
-  bigmeat_data <- bigmeat_data[flagO_P %in% "" & flagO_S %in% "I" |
-                             flagO_P %in% "I" & flagO_S %in% "", 
-                           `:=` (flagObservationStatus = "I", flagMethod = "i") ]
-  
-  bigmeat_data <- bigmeat_data[flagO_P %in% "" & flagO_S %in% "T" |
-                                 flagO_P %in% "T" & flagO_S %in% "", 
-                               `:=` (flagObservationStatus = "T", flagMethod = "i") ]
-  
-  bigmeat_data <- bigmeat_data[flagO_P %in% "" & flagO_S %in% "E" |
-                                     flagO_P %in% "E" & flagO_S %in% "", 
-                                   `:=` (flagObservationStatus = "E", flagMethod = "i") ]
-  #reorganize data in sws format
-  bigmeat_data_carcass = bigmeat_data[, list(geographicAreaM49, measuredElement = "5417", measuredItemCPC,
-                                  timePointYears,Value = `5417` ,flagObservationStatus,flagMethod)]
-  
-  #copy yield values in 54170 with flag blank c
-  bigmeat_data_carcass_indig = copy(bigmeat_data_carcass)
-  
-  bigmeat_data_carcass_indig[, measuredElement := "54170"]
-  
-  bigmeat_data_carcass_indig[, flagObservationStatus := ""]
-  bigmeat_data_carcass_indig[, flagMethod := "c"]
-  
-  bigmeat_data_carcass_tot = rbind(bigmeat_data_carcass,bigmeat_data_carcass_indig)
-  #bind with total dataset already containing crops yield and removing the previous yield before attaching
-  data_prod_3 <- rbind(data_prod_2[! bigmeat_data_carcass_tot , on = c("measuredElement","geographicAreaM49",
-                                                      "timePointYears", "measuredItemCPC")], bigmeat_data_carcass_tot)
-}else{
-  data_prod_3 <- data_prod_2
-}
-#3) Calculate Meat Yield for small animals
+# COMPLETE DATA - Triplet, With input and output
+
+not_livestock_complete_data <- not_livestock_data[, length(unique(measuredElement)) > 1, 
+                            by = c("geographicAreaM49", "measuredItemCPC", "timePointYears")]
+
+not_livestock_complete_data <- left_join(not_livestock_data, not_livestock_complete_data, 
+                                         by =  c("geographicAreaM49", "measuredItemCPC", "timePointYears"))
+
+not_livestock_complete_data <- as.data.table(not_livestock_complete_data)
+#I decided to not filter only for year val since I would need the previous yield values to see outliers in prodctivty
+not_livestock_complete_data <- not_livestock_complete_data[V1 == "TRUE",]
+
+not_livestock_complete_data[, V1 := NULL]
+
+#Inside the Yield function I remove the productivity present data to calculate them from the scratch
+yield_data <- yield_function(not_livestock_complete_data)
+
+#Let s merge the productivity data recalculated 
+
+#Before I remove all the old productivity elements since I recomputed
+not_livestock_complete_data <- not_livestock_complete_data[measuredElement %!in% c("5421","5417","5424","5422"),]
 
 
-smallmeat_data <- data_prod_3[measuredElement %in% c("5321","5510"),]
+not_livestock_complete_data <- rbind(not_livestock_complete_data[! yield_data , on = c("measuredElement","geographicAreaM49",
+                                                               "timePointYears", "measuredItemCPC")], yield_data)
 
-smallmeat_data <- dcast(smallmeat_data, measuredItemCPC + geographicAreaM49 + timePointYears ~ measuredElement, 
-                      value.var = c("Value"))
 
-if("5510" %in% colnames(smallmeat_data) & "5321" %in% colnames(smallmeat_data)){
-  
-  smallmeat_data <- smallmeat_data[, `5424` := (`5510`)*1000/`5321`] 
-  
-  smallmeat_data <- smallmeat_data[!(is.na(`5424`)) & !(is.nan(`5424`)) & !(is.infinite(`5424`)),]
-  
-  
-  smallmeat_data <- merge(smallmeat_data,
-                        data_prod_3[measuredElement %in% "5510", 
-                                    list(geographicAreaM49,measuredItemCPC, timePointYears, 
-                                         flagO_P = flagObservationStatus,
-                                         flagM_P = flagMethod)], 
-                        by = c("geographicAreaM49", "timePointYears", "measuredItemCPC"))
-  
-  smallmeat_data <- merge(smallmeat_data,
-                        data_prod_3[measuredElement %in% "5321", 
-                                    list(geographicAreaM49,measuredItemCPC, timePointYears, 
-                                         flagO_S = flagObservationStatus,
-                                         flagM_S = flagMethod)], 
-                        by = c("geographicAreaM49", "timePointYears", "measuredItemCPC"))
-  
-  smallmeat_data <- smallmeat_data[, `:=` (flagObservationStatus = NA_character_, flagMethod = NA_character_)]
-  
-  #insert official flag to yield where both official
-  smallmeat_data <- smallmeat_data[flagO_P %in% "" &
-                                 flagO_S %in% "", 
-                               `:=` (flagObservationStatus = "", flagMethod = "i") ]
-  
-  #insert imputed flag to yield where both imputed
-  smallmeat_data <- smallmeat_data[flagO_P %in% c("I","E") &
-                                 flagO_S %in% c("I","E"), 
-                               `:=` (flagObservationStatus = "I", flagMethod = "i") ]
-  
-  #insert t flag to yield where are Tp
-  smallmeat_data <- smallmeat_data[flagO_P %in% "T" &
-                                 flagO_S %in% "T", 
-                               `:=` (flagObservationStatus = "T", flagMethod = "i") ]
-  
-  #insert flag to yeld manual estimated
-  smallmeat_data <- smallmeat_data[flagO_P %in% "E" & flagM_P %in% "f" &
-                                 flagO_S %in% "E" & flagM_S %in% "f", 
-                               `:=` (flagObservationStatus = "E", flagMethod = "i") ]
-  
-  #insert flag one at leats one of the 2 element is imputed
-  smallmeat_data <- smallmeat_data[flagO_P %in% "" & flagO_S %in% "I" |
-                                 flagO_P %in% "I" & flagO_S %in% "", 
-                               `:=` (flagObservationStatus = "I", flagMethod = "i") ]
-  
-  smallmeat_data <- smallmeat_data[flagO_P %in% "" & flagO_S %in% "T" |
-                                 flagO_P %in% "T" & flagO_S %in% "", 
-                               `:=` (flagObservationStatus = "T", flagMethod = "i") ]
-  
-  smallmeat_data <- smallmeat_data[flagO_P %in% "" & flagO_S %in% "E" |
-                           flagO_P %in% "E" & flagO_S %in% "", 
-                         `:=` (flagObservationStatus = "E", flagMethod = "i") ]
-  #reorganize data in sws format
-  smallmeat_data_carcass = smallmeat_data[, list(geographicAreaM49, measuredElement = "5424", measuredItemCPC,
-                                             timePointYears,Value = `5424` ,flagObservationStatus,flagMethod)]
-  
-  #copy yield values in 54240 with flag blank c
-  smallmeat_data_carcass_indig = copy(smallmeat_data_carcass)
-  
-  smallmeat_data_carcass_indig[, measuredElement := "54240"]
-  
-  smallmeat_data_carcass_indig[, flagObservationStatus := ""]
-  smallmeat_data_carcass_indig[, flagMethod := "c"]
-  
-  smallmeat_data_carcass_tot = rbind(smallmeat_data_carcass,smallmeat_data_carcass_indig)
-  #bind with total dataset already containing crops yield and removing the previous yield before attaching
-  data_prod_4 <- rbind(data_prod_3[! smallmeat_data_carcass_tot, on = c("measuredElement","geographicAreaM49",
-                                                                       "timePointYears", "measuredItemCPC")], 
-                       smallmeat_data_carcass_tot)
-}else{
-  data_prod_4 <- data_prod_3
+
+
+# PARTIAL DATA - Triplet, Without input or output
+
+#############################################################################
+#############################################################################
+#     NOT LIVESTOCK DATA PARTIAL TRIPLET EXTRACTION                         #
+#############################################################################
+#############################################################################
+
+not_livestock_partial_data <- anti_join(not_livestock_data, not_livestock_complete_data, by=c("measuredElement","geographicAreaM49",
+                                                                "timePointYears", "measuredItemCPC"))
+
+#let add historical data for items which perhaps have partial triplet only for one year
+
+not_livestock_partial_data <- as.data.table(not_livestock_partial_data)
+
+not_live_partial_comb <- unique(not_livestock_partial_data[, .(measuredItemCPC, measuredElement)])
+
+not_live_partial_historic <- data.table(geographicAreaM49=character(), measuredElement=character(), measuredItemCPC=character(),
+                               timePointYears=character(),Value=numeric(),flagObservationStatus=character(),
+                               flagMethod=character())
+
+for (i in 1:length(c(not_live_partial_comb)$measuredItemCPC)){
+    not_live_partial_historic <- rbind(not_live_partial_historic,
+                              data_backup[measuredItemCPC %in% c(not_live_partial_comb)$measuredItemCPC[i]&
+                                       measuredElement %in% c(not_live_partial_comb)$measuredElement[i],] )
+    i = i+1
 }
 
-                                    ######################################
-                                    #                                    #
-                                    #                                    #
-                                    #               MILK                 #
-                                    #                                    #
-                                    #                                    #
-                                    ######################################
+not_livestock_partial_data <- rbind(not_live_partial_historic[! not_livestock_partial_data, on = c("measuredElement","geographicAreaM49",
+                                                                 "timePointYears", "measuredItemCPC")], not_livestock_partial_data)
 
-# "5318","5510","5417",#Milk: Milk animals, Production, Yields/Carcass
-milk_data <- data_prod_4[measuredElement %in% c("5318","5510"),]
+#vedi diff tra not live partial data e historical
 
-milk_data <- dcast(milk_data, measuredItemCPC + geographicAreaM49 + timePointYears ~ measuredElement, 
-                    value.var = c("Value"))
 
-if("5510" %in% colnames(milk_data) & "5318" %in% colnames(milk_data)){
-  milk_data <- milk_data[, `5417` := (`5510`)*1000/`5318`]
-  
-  milk_data <- milk_data[!(is.na(`5417`)) & !(is.nan(`5417`)) & !(is.infinite(`5417`)),]
-  
-  
-  milk_data <- merge(milk_data,
-                      data_prod_4[measuredElement %in% "5510", 
-                                list(geographicAreaM49,measuredItemCPC, timePointYears, 
-                                     flagO_P = flagObservationStatus,
-                                     flagM_P = flagMethod)], 
-                      by = c("geographicAreaM49", "timePointYears", "measuredItemCPC"))
-  
-  milk_data <- merge(milk_data,
-                      data_prod_4[measuredElement %in% "5318", 
-                                list(geographicAreaM49,measuredItemCPC, timePointYears, 
-                                     flagO_H = flagObservationStatus,
-                                     flagM_H = flagMethod)], 
-                      by = c("geographicAreaM49", "timePointYears", "measuredItemCPC"))
-  
-  milk_data <- milk_data[, `:=` (flagObservationStatus = NA_character_, flagMethod = NA_character_)]
-  
-  #insert official flag to yield where both official
-  milk_data <- milk_data[flagO_P %in% "" &
-                             flagO_H %in% "", 
-                           `:=` (flagObservationStatus = "", flagMethod = "i") ]
-  
-  #insert imputed flag to yield where both imputed
-  milk_data <- milk_data[flagO_P %in% c("I","E") &
-                             flagO_H %in% c("I","E"), 
-                           `:=` (flagObservationStatus = "I", flagMethod = "i") ]
-  
-  #insert t flag to yield where are Tp
-  milk_data <- milk_data[flagO_P %in% "T" &
-                             flagO_H %in% "T", 
-                           `:=` (flagObservationStatus = "T", flagMethod = "i") ]
-  
-  #insert flag to yeld manual estimated
-  milk_data <- milk_data[flagO_P %in% "E" & flagM_P %in% "f" &
-                             flagO_H %in% "E" & flagM_H %in% "f", 
-                           `:=` (flagObservationStatus = "E", flagMethod = "i") ]
-  
-  #insert flag one at leats one of the 2 element is imputed
-  milk_data <- milk_data[flagO_P %in% "" & flagO_H %in% "I" |
-                             flagO_P %in% "I" & flagO_H %in% "", 
-                           `:=` (flagObservationStatus = "I", flagMethod = "i") ]
-  
-  milk_data <- milk_data[flagO_P %in% "" & flagO_H %in% "T" |
-                             flagO_P %in% "T" & flagO_H %in% "", 
-                           `:=` (flagObservationStatus = "T", flagMethod = "i") ]
-  
-  milk_data <- milk_data[flagO_P %in% "" & flagO_H %in% "E" |
-                           flagO_P %in% "E" & flagO_H %in% "", 
-                         `:=` (flagObservationStatus = "E", flagMethod = "i") ]
-  
-  #reorganize data in sws format
-  milk_yield = milk_data[, list(geographicAreaM49, measuredElement = "5417", measuredItemCPC,
-                                  timePointYears,Value = `5417` ,flagObservationStatus,flagMethod)]
-  
-  #bind with original dataset and removing the previous yield before attaching
-  data_prod_5 <- rbind(data_prod_4[! milk_yield , on = c("measuredElement","geographicAreaM49",
-                                                      "timePointYears", "measuredItemCPC")], milk_yield)
-}else{
-  data_prod_5 <- data_prod_4
+#############################################################################
+#############################################################################
+#         LIVESTOCK DATA COMPLETE TRIPLET EXTRACTION & YIELD COMPUTATION    #
+#############################################################################
+#############################################################################
+complete_livestock_data <- livestock_data[, length(unique(measuredElement)) > 1, 
+                            by = c("geographicAreaM49", "measuredItemCPC", "timePointYears")]
+
+complete_livestock_data <- left_join(livestock_data, complete_livestock_data, by =  c("geographicAreaM49", "measuredItemCPC", "timePointYears"))
+
+complete_livestock_data <- as.data.table(complete_livestock_data)
+#I decided to not filter only for year val since I would need the previous yield values to see outliers in prodctivty
+complete_livestock_data <- complete_livestock_data[V1 == "TRUE",]
+
+complete_livestock_data[, V1 := NULL]
+
+
+offtake_data <- offtake_function(complete_livestock_data)
+
+complete_livestock_data <- complete_livestock_data[measuredElement %!in% c("5077"),]
+
+complete_livestock_data <- rbind(complete_livestock_data[! offtake_data , on = c("measuredElement","geographicAreaM49",
+                                                    "timePointYears", "measuredItemCPC")], offtake_data)
+
+
+#############################################################################
+#############################################################################
+#         LIVESTOCK DATA PARTIAL TRIPLET EXTRACTION                         #
+#############################################################################
+#############################################################################
+
+livestock_partial_data <- anti_join(livestock_data, complete_livestock_data, by=c("measuredElement","geographicAreaM49",
+                                                                                              "timePointYears", "measuredItemCPC"))
+
+#let add historical data for items which perhaps have partial triplet only for one year
+
+livestock_partial_data <- as.data.table(livestock_partial_data)
+
+live_partial_comb <- unique(livestock_partial_data[, .(measuredItemCPC, measuredElement)])
+
+live_partial_historic <- data.table(geographicAreaM49=character(), measuredElement=character(), measuredItemCPC=character(),
+                                        timePointYears=character(),Value=numeric(),flagObservationStatus=character(),
+                                        flagMethod=character())
+
+for (i in 1:length(c(live_partial_comb)$measuredItemCPC)){
+    live_partial_historic <- rbind(live_partial_historic,
+                                       data[measuredItemCPC %in% c(live_partial_comb)$measuredItemCPC[i]&
+                                                measuredElement %in% c(live_partial_comb)$measuredElement[i],] )
+    i = i+1
 }
 
+livestock_partial_data <- rbind(live_partial_historic[! livestock_partial_data, on = c("measuredElement","geographicAreaM49",
+                                                                                                   "timePointYears", "measuredItemCPC")], livestock_partial_data)
 
-                                        ######################################
-                                        #                                    #
-                                        #                                    #
-                                        #               EGGS                 #
-                                        #                                    #
-                                        #                                    #
-                                        ######################################
 
-#"5313","5424","5510","5513")#EGGS: Laying, Yelds/Carcass, Production t, Production 1000. Yield: 5510/5313
-eggs_data <- data_prod_5[measuredElement %in% c("5313","5510"),]
+#PERFORM OUTLIER DETECTION ON:
+#1) Complete data containing triplet cleaned and recalculated with their respective historical series.
+#2) Partial data contaning single series with their historical series
 
-eggs_data <- dcast(eggs_data, measuredItemCPC + geographicAreaM49 + timePointYears ~ measuredElement, 
-                   value.var = c("Value"))
+#Merge not livestock and livestock data
 
-if("5510" %in% colnames(eggs_data) & "5313" %in% colnames(eggs_data)){
-  eggs_data <- eggs_data[, `5424` := (`5510`)*1000/`5313`]
-  
-  eggs_data <- eggs_data[!(is.na(`5424`)) & !(is.nan(`5424`)) & !(is.infinite(`5424`)),]
-  
-  
-  eggs_data <- merge(eggs_data,
-                     data_prod_5[measuredElement %in% "5510", 
-                                 list(geographicAreaM49,measuredItemCPC, timePointYears, 
-                                      flagO_P = flagObservationStatus,
-                                      flagM_P = flagMethod)], 
-                     by = c("geographicAreaM49", "timePointYears", "measuredItemCPC"))
-  
-  eggs_data <- merge(eggs_data,
-                     data_prod_5[measuredElement %in% "5313", 
-                                 list(geographicAreaM49,measuredItemCPC, timePointYears, 
-                                      flagO_H = flagObservationStatus,
-                                      flagM_H = flagMethod)], 
-                     by = c("geographicAreaM49", "timePointYears", "measuredItemCPC"))
-  
-  eggs_data <- eggs_data[, `:=` (flagObservationStatus = NA_character_, flagMethod = NA_character_)]
-  
-  #insert official flag to yield where both official
-  eggs_data <- eggs_data[flagO_P %in% "" &
-                           flagO_H %in% "", 
-                         `:=` (flagObservationStatus = "", flagMethod = "i") ]
-  
-  #insert imputed flag to yield where both imputed
-  eggs_data <- eggs_data[flagO_P %in% c("I","E") &
-                           flagO_H %in% c("I","E"), 
-                         `:=` (flagObservationStatus = "I", flagMethod = "i") ]
-  
-  #insert t flag to yield where are Tp
-  eggs_data <- eggs_data[flagO_P %in% "T" &
-                           flagO_H %in% "T", 
-                         `:=` (flagObservationStatus = "T", flagMethod = "i") ]
-  
-  #insert flag to yeld manual estimated
-  eggs_data <- eggs_data[flagO_P %in% "E" & flagM_P %in% "f" &
-                           flagO_H %in% "E" & flagM_H %in% "f", 
-                         `:=` (flagObservationStatus = "E", flagMethod = "i") ]
-  
-  #insert flag one at leats one of the 2 element is imputed
-  eggs_data <- eggs_data[flagO_P %in% "" & flagO_H %in% "I" |
-                           flagO_P %in% "I" & flagO_H %in% "", 
-                         `:=` (flagObservationStatus = "I", flagMethod = "i") ]
-  
-  eggs_data <- eggs_data[flagO_P %in% "" & flagO_H %in% "T" |
-                           flagO_P %in% "T" & flagO_H %in% "", 
-                         `:=` (flagObservationStatus = "T", flagMethod = "i") ]
-  
-  eggs_data <- eggs_data[flagO_P %in% "" & flagO_H %in% "E" |
-                           flagO_P %in% "E" & flagO_H %in% "", 
-                         `:=` (flagObservationStatus = "E", flagMethod = "i") ]
-  #reorganize data in sws format
-  eggs_yield = eggs_data[, list(geographicAreaM49, measuredElement = "5424", measuredItemCPC,
-                                timePointYears,Value = `5424` ,flagObservationStatus,flagMethod)]
-  
-  #bind with original dataset and removing the previous yield before attaching
-  data_prod_6 <- rbind(data_prod_5[! eggs_yield , on = c("measuredElement","geographicAreaM49",
-                                                         "timePointYears", "measuredItemCPC")], eggs_yield)
+final_complete_triplet <- rbind(not_livestock_complete_data, complete_livestock_data)
+
+
+final_partial_triplet <- rbind(not_livestock_partial_data,livestock_partial_data)
+
+######################################
+#                                    #
+#                                    #
+#          OUTLIER DETECTION         #
+#      (on data with productivity)   #
+#                                    #
+######################################
+
+if(nrow(final_complete_triplet) > 0){
+
+    out1_data <- final_complete_triplet[order(geographicAreaM49, measuredElement, measuredItemCPC, timePointYears), 
+                           avg := roll_meanr(Value, 3),
+                           by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out1_data[order(geographicAreaM49,measuredItemCPC,measuredElement,timePointYears),prev_avg:=lag(avg),
+              by= c("geographicAreaM49","measuredItemCPC","measuredElement")]
+    
+    out1_data <- out1_data[order(geographicAreaM49, measuredElement, measuredItemCPC),] [order( -timePointYears ),] 
+    
+    out1_data <- out1_data[timePointYears %in% as.character(startYear:endYear),]
+    
+    out1_data[,`:=`(yield_lower_th = NA_real_, yield_upper_th = NA_real_)]
+    
+    
+    out1_data[, `:=`(
+        yield_lower_th = prev_avg[measuredElement %in% c("5421","5417","5424","5417","5422","5077")] - 
+            prev_avg[measuredElement %in% c("5421","5417","5424","5417","5422","5077")]*0.3,
+        yield_upper_th = prev_avg[measuredElement %in% c("5421","5417","5424","5417","5422","5077")] + 
+            prev_avg[measuredElement %in% c("5421","5417","5424","5417","5422","5077")]*0.3
+    ),
+    by = c("geographicAreaM49","measuredItemCPC","timePointYears")]
+    
+    
+    out1_data[,yieldCheck:=ifelse(Value[measuredElement %in% c("5421","5417","5424","5417","5422","5077")] <yield_lower_th | 
+                                      Value[measuredElement %in% c("5421","5417","5424","5417","5422","5077")] > yield_upper_th,TRUE,FALSE),
+              by = c("geographicAreaM49","measuredItemCPC","timePointYears")]
+    
+    
+    out1_data[,`:=`(lower_th = NA_real_, upper_th = NA_real_)]
+    
+    
+    dbg_print("Outlier criteria")
+    
+    ######################################
+    #                                    #
+    #                                    #
+    #          STRICT CRITERIA           #
+    #                                    #
+    #                                    #
+    ######################################
+    out1_data[Value < 100 & yieldCheck == TRUE | Value < 100 & is.na(yieldCheck), `:=`(
+        lower_th = prev_avg - prev_avg*5,
+        upper_th = prev_avg + prev_avg*5
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    
+    out1_data[ Value >= 100 & Value < 1000 & yieldCheck == TRUE | Value >= 100 & Value < 1000 & is.na(yieldCheck), `:=`(
+        lower_th = prev_avg - prev_avg*1,
+        upper_th = prev_avg + prev_avg*1
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out1_data[ Value >= 1000 & Value < 10000 & yieldCheck == TRUE | Value >= 1000 & Value < 10000 & is.na(yieldCheck), `:=`(
+        lower_th = prev_avg - prev_avg*0.8,
+        upper_th = prev_avg + prev_avg*0.8
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out1_data[ Value >= 10000 & Value < 50000 & yieldCheck == TRUE | Value >= 10000 & Value < 50000 & is.na(yieldCheck), `:=`(
+        lower_th = prev_avg - prev_avg*0.6,
+        upper_th = prev_avg + prev_avg*0.6
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out1_data[ Value >= 50000 & Value < 100000 & yieldCheck == TRUE |  Value >= 50000 & Value < 100000 & is.na(yieldCheck), `:=`(
+        lower_th = prev_avg - prev_avg*0.5,
+        upper_th = prev_avg + prev_avg*0.5
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out1_data[ Value >= 100000 & Value < 500000 & yieldCheck == TRUE | Value >= 100000 & Value < 500000 & is.na(yieldCheck), `:=`(
+        lower_th = prev_avg - prev_avg*0.4,
+        upper_th = prev_avg + prev_avg*0.4
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out1_data[ Value >= 500000 & Value < 1000000 & yieldCheck == TRUE | Value >= 500000 & Value < 1000000 & is.na(yieldCheck), `:=`(
+        lower_th = prev_avg - prev_avg*0.3,
+        upper_th = prev_avg + prev_avg*0.3
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out1_data[ Value >= 1000000 & Value < 3000000 & yieldCheck == TRUE | Value >= 1000000 & Value < 3000000 & is.na(yieldCheck), `:=`(
+        lower_th = prev_avg - prev_avg*0.15,
+        upper_th = prev_avg + prev_avg*0.15
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out1_data[ Value >= 3000000 & Value < 50000000 & yieldCheck == TRUE |  Value >= 3000000 & Value < 50000000 & is.na(yieldCheck), `:=`(
+        lower_th = prev_avg - prev_avg*0.1,
+        upper_th = prev_avg + prev_avg*0.1
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out1_data[ Value>=50000000 & yieldCheck == TRUE |  Value>=50000000 & is.na(yieldCheck), `:=`(
+        lower_th = prev_avg - prev_avg*0.1,
+        upper_th = prev_avg + prev_avg*0.1
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    dbg_print("End of strict criteria")
+    #
+    
+    ######################################
+    #                                    #
+    #                                    #
+    #          SOFT CRITERIA             #
+    #                                    #
+    #                                    #
+    ######################################
+    #dovrei aggiungere come filtro a ogni check: | Value >= 100 & Value < 1000 & measuredElement %in% "5111"
+    
+    out1_data[Value < 100 & yieldCheck == FALSE, `:=`(
+        lower_th = prev_avg - prev_avg*9,
+        upper_th = prev_avg + prev_avg*9
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    
+    out1_data[ Value >= 100 & Value < 1000 & yieldCheck == FALSE, `:=`(
+        lower_th = prev_avg - prev_avg*5,
+        upper_th = prev_avg + prev_avg*5
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    
+    out1_data[ Value >= 1000 & Value < 10000 & yieldCheck == FALSE, `:=`(
+        lower_th = prev_avg - prev_avg*1,
+        upper_th = prev_avg + prev_avg*1
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out1_data[ Value >= 10000 & Value < 50000 & yieldCheck == FALSE, `:=`(
+        lower_th = prev_avg - prev_avg*0.6,
+        upper_th = prev_avg + prev_avg*0.6
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out1_data[ Value >= 50000 & Value < 100000 & yieldCheck == FALSE, `:=`(
+        lower_th = prev_avg - prev_avg*0.6,
+        upper_th = prev_avg + prev_avg*0.6
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out1_data[ Value >= 100000 & Value < 500000 & yieldCheck == FALSE, `:=`(
+        lower_th = prev_avg - prev_avg*0.5,
+        upper_th = prev_avg + prev_avg*0.5
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out1_data[ Value >= 500000 & Value < 1000000 & yieldCheck == FALSE, `:=`(
+        lower_th = prev_avg - prev_avg*0.4,
+        upper_th = prev_avg + prev_avg*0.4
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out1_data[ Value >= 1000000 & Value < 3000000 & yieldCheck == FALSE, `:=`(
+        lower_th = prev_avg - prev_avg*0.4,
+        upper_th = prev_avg + prev_avg*0.4
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out1_data[ Value >= 3000000 & Value < 20000000 & yieldCheck == FALSE, `:=`(
+        lower_th = prev_avg - prev_avg*0.3,
+        upper_th = prev_avg + prev_avg*0.3
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out1_data[ Value >= 20000000 & Value < 50000000 & yieldCheck == FALSE, `:=`(
+        lower_th = prev_avg - prev_avg*0.15,
+        upper_th = prev_avg + prev_avg*0.15
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out1_data[ Value>=50000000 & yieldCheck == FALSE, `:=`(
+        lower_th = prev_avg - prev_avg*0.1,
+        upper_th = prev_avg + prev_avg*0.1
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    
+    out1_data[,outCheck:=ifelse(Value <lower_th | Value > upper_th ,TRUE,FALSE)]
+    
+    out1_data[(prev_avg/Value) > 9 ,outCheck:=TRUE]
+    
+    out1_data[Value < 1000 & prev_avg < 1000 & yieldCheck == FALSE,outCheck:=FALSE]
+
 }else{
-  data_prod_6 <- data_prod_5
+    out1_data <- data.table()
 }
 
+######################################
+#                                    #
+#                                    #
+#          OUTLIER DETECTION         #
+#          (on single series)        #
+#                                    #
+######################################
 
+if(nrow(final_partial_triplet)>0){
 
-                                              ######################################
-                                              #                                    #
-                                              #                                    #
-                                              #          Single series             #
-                                              #           (e.g. Honey)             #
-                                              #                                    #
-                                              ######################################
+    out2_data <- final_partial_triplet[order(geographicAreaM49, measuredElement, measuredItemCPC, timePointYears), 
+                                        avg := roll_meanr(Value, 3),
+                                        by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out2_data[order(geographicAreaM49,measuredItemCPC,measuredElement,timePointYears),prev_avg:=lag(avg),
+              by= c("geographicAreaM49","measuredItemCPC","measuredElement")]
+    
+    out2_data <- out2_data[order(geographicAreaM49, measuredElement, measuredItemCPC),] [order( -timePointYears ),] 
+    
+    out2_data <- out2_data[timePointYears %in% as.character(startYear:endYear),]
+    
+    out2_data[,`:=`(lower_th = NA_real_, upper_th = NA_real_)]
+    
+    
+    dbg_print("Outlier criteria")
+    
+    ######################################
+    #                                    #
+    #                                    #
+    #          SOFT CRITERIA             #
+    #                                    #
+    #                                    #
+    ######################################
+    #dovrei aggiungere come filtro a ogni check: | Value >= 100 & Value < 1000 & measuredElement %in% "5111"
+    
+    out2_data[Value < 100, `:=`(
+        lower_th = prev_avg - prev_avg*9,
+        upper_th = prev_avg + prev_avg*9
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    
+    out2_data[ Value >= 100 & Value < 1000, `:=`(
+        lower_th = prev_avg - prev_avg*5,
+        upper_th = prev_avg + prev_avg*5
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    
+    out2_data[ Value >= 1000 & Value < 10000, `:=`(
+        lower_th = prev_avg - prev_avg*1,
+        upper_th = prev_avg + prev_avg*1
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out2_data[ Value >= 10000 & Value < 50000, `:=`(
+        lower_th = prev_avg - prev_avg*0.6,
+        upper_th = prev_avg + prev_avg*0.6
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out2_data[ Value >= 50000 & Value < 100000, `:=`(
+        lower_th = prev_avg - prev_avg*0.6,
+        upper_th = prev_avg + prev_avg*0.6
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out2_data[ Value >= 100000 & Value < 500000, `:=`(
+        lower_th = prev_avg - prev_avg*0.5,
+        upper_th = prev_avg + prev_avg*0.5
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out2_data[ Value >= 500000 & Value < 1000000, `:=`(
+        lower_th = prev_avg - prev_avg*0.4,
+        upper_th = prev_avg + prev_avg*0.4
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out2_data[ Value >= 1000000 & Value < 3000000, `:=`(
+        lower_th = prev_avg - prev_avg*0.4,
+        upper_th = prev_avg + prev_avg*0.4
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out2_data[ Value >= 3000000 & Value < 20000000, `:=`(
+        lower_th = prev_avg - prev_avg*0.3,
+        upper_th = prev_avg + prev_avg*0.3
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out2_data[ Value >= 20000000 & Value < 50000000, `:=`(
+        lower_th = prev_avg - prev_avg*0.15,
+        upper_th = prev_avg + prev_avg*0.15
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    
+    out2_data[ Value>=50000000, `:=`(
+        lower_th = prev_avg - prev_avg*0.1,
+        upper_th = prev_avg + prev_avg*0.1
+    ),
+    by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
+    dbg_print("End of soft criteria - incomplete triplet")
+    #
+    
+    
+    
+    out2_data[,outCheck:=ifelse(Value <lower_th | Value > upper_th ,TRUE,FALSE)]
+    
+    out2_data[(prev_avg/Value) > 9 ,outCheck:=TRUE]
+    
+    out2_data[Value < 1000 & prev_avg < 1000 ,outCheck:=FALSE]
 
+}else{
+    out2_data <- data.table()
+}
 
-data_single <- copy(data_prod_6)
-
-data_single <- data_single[measuredElement %in% c("5314","5319"),]
-
-data_single <- merge(data_single,flagValidTable, all.x = T, by = c("flagObservationStatus","flagMethod"))
-
-data_single[, c("Valid"):=NULL]
-
-data_single <- data_single[Protected %in% c("FALSE"),]
-
-data_single[, c("Protected"):=NULL]
-
-#Removing Not protected single series from the main dataset
-data_final <- data_prod_6[! data_single , on = c("measuredElement","geographicAreaM49",
-                                                      "timePointYears", "measuredItemCPC")]
-
-dbg_print("End of Yield calculation")
-                                                    ######################################
-                                                    #                                    #
-                                                    #                                    #
-                                                    #          OUTLIER DETECTION         #
-                                                    #           (e.g. Honey)             #
-                                                    #                                    #
-                                                    ######################################
-dbg_print("Start outlier routine")
-#outlier first round. On elements != then Yield
-#3 outlier detection 
-#CROPS -> Area Harvested, Production
-#BIG animal <- stocks, slaughtered,
-#Small animals: stocks, slaughtered
-#Big meat: Slaughtered, Production
-#Small meat: Slaughtered, Production
-#5315 e 5319
-#Milk animals, Production
-#Laying, Production t, Production 1000
-#Check single series at this point if we didn t have 5314 | 5319 official in 2014-2019 we deleted the element. 
-#For 2014-2019 I take the last aanipulated dataset with the new Yields calculated
-#For each element I calculate the moving average by item e elemen e geo. 
-
-#out1_elements <- c("5510","5312","5111","5315","5112","5316","5320","5321","5314","5319","5318","5313")
-
-out1 <- data_final[measuredElement %in% unique(ELEMENTS),]
-
-old_year_key <- DatasetKey(domain = "aproduction", 
-                           dataset = "aproduction", 
-                           dimensions = list(measuredItemCPC = Dimension("measuredItemCPC", unique(cpc_cluster$cpc)), 
-                                             measuredElement = Dimension("measuredElement", unique(ELEMENTS)),
-                                             geographicAreaM49 = Dimension("geographicAreaM49", as.vector(COUNTRY)),
-                                             timePointYears = Dimension("timePointYears", as.character(interval))))
-
-old_year_data <- GetData(old_year_key)
-
-out1_data <- rbind(out1,old_year_data)
-
-#Calculate moving average for each year
-dbg_print("moving average")
-
-#out1_data <- out1_data[order(geographicAreaM49, measuredElement, measuredItemCPC),] [order( -timePointYears ),] 
-#analisi sugli na e se dipendono da mancanza dei 5 anni. voglio vedere se fa automaticamente con 4-3-2
-out1_data <- out1_data[order(geographicAreaM49, measuredElement, measuredItemCPC, timePointYears), 
-                       avg := roll_meanr(Value, 3),
-                       by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-out1_data[order(geographicAreaM49,measuredItemCPC,measuredElement,timePointYears),prev_avg:=lag(avg),
-          by= c("geographicAreaM49","measuredItemCPC","measuredElement")]
-
-out1_data <- out1_data[order(geographicAreaM49, measuredElement, measuredItemCPC),] [order( -timePointYears ),] 
-
-#if yields elements exceed 30% so I put Yield check True or False [by item and year]
-#con la colonna avrò per item per anno se l'yeld ha superato true or not. Quindi potrei anche dividere i dataset e usare i diversi
-#contraints sugli altri elementi!
-
-#Keep star year-last year
-
-out1_data <- out1_data[timePointYears %in% as.character(startYear:endYear),]
-
-out1_data[,`:=`(yield_lower_th = NA_real_, yield_upper_th = NA_real_)]
-
-
-
-out1_data[, `:=`(
-  yield_lower_th = prev_avg[measuredElement %in% c("5421","5417","5424","5417","5422")] - 
-    prev_avg[measuredElement %in% c("5421","5417","5424","5417","5422")]*0.3,
-  yield_upper_th = prev_avg[measuredElement %in% c("5421","5417","5424","5417","5422")] + 
-    prev_avg[measuredElement %in% c("5421","5417","5424","5417","5422")]*0.3
-),
-by = c("geographicAreaM49","measuredItemCPC","timePointYears")]
-
-
-out1_data[,yieldCheck:=ifelse(Value[measuredElement %in% c("5421","5417","5424","5417","5422")] <yield_lower_th | 
-                              Value[measuredElement %in% c("5421","5417","5424","5417","5422")] > yield_upper_th,TRUE,FALSE),
-          by = c("geographicAreaM49","measuredItemCPC","timePointYears")]
-
-
-out1_data[,`:=`(lower_th = NA_real_, upper_th = NA_real_)]
-
-
-dbg_print("Outlier criteria")
-                                              ######################################
-                                              #                                    #
-                                              #                                    #
-                                              #          STRICT CRITERIA           #
-                                              #                                    #
-                                              #                                    #
-                                              ######################################
-out1_data[Value < 100 & yieldCheck == TRUE | Value < 100 & is.na(yieldCheck), `:=`(
-  lower_th = prev_avg - prev_avg*5,
-  upper_th = prev_avg + prev_avg*5
-  ),
-  by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-
-out1_data[ Value >= 100 & Value < 1000 & yieldCheck == TRUE | Value >= 100 & Value < 1000 & is.na(yieldCheck), `:=`(
-  lower_th = prev_avg - prev_avg*1,
-  upper_th = prev_avg + prev_avg*1
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-out1_data[ Value >= 1000 & Value < 10000 & yieldCheck == TRUE | Value >= 1000 & Value < 10000 & is.na(yieldCheck), `:=`(
-  lower_th = prev_avg - prev_avg*0.8,
-  upper_th = prev_avg + prev_avg*0.8
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-out1_data[ Value >= 10000 & Value < 50000 & yieldCheck == TRUE | Value >= 10000 & Value < 50000 & is.na(yieldCheck), `:=`(
-  lower_th = prev_avg - prev_avg*0.6,
-  upper_th = prev_avg + prev_avg*0.6
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-out1_data[ Value >= 50000 & Value < 100000 & yieldCheck == TRUE |  Value >= 50000 & Value < 100000 & is.na(yieldCheck), `:=`(
-  lower_th = prev_avg - prev_avg*0.5,
-  upper_th = prev_avg + prev_avg*0.5
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-out1_data[ Value >= 100000 & Value < 500000 & yieldCheck == TRUE | Value >= 100000 & Value < 500000 & is.na(yieldCheck), `:=`(
-  lower_th = prev_avg - prev_avg*0.4,
-  upper_th = prev_avg + prev_avg*0.4
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-out1_data[ Value >= 500000 & Value < 1000000 & yieldCheck == TRUE | Value >= 500000 & Value < 1000000 & is.na(yieldCheck), `:=`(
-  lower_th = prev_avg - prev_avg*0.3,
-  upper_th = prev_avg + prev_avg*0.3
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-out1_data[ Value >= 1000000 & Value < 3000000 & yieldCheck == TRUE | Value >= 1000000 & Value < 3000000 & is.na(yieldCheck), `:=`(
-  lower_th = prev_avg - prev_avg*0.15,
-  upper_th = prev_avg + prev_avg*0.15
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-out1_data[ Value >= 3000000 & Value < 50000000 & yieldCheck == TRUE |  Value >= 3000000 & Value < 50000000 & is.na(yieldCheck), `:=`(
-  lower_th = prev_avg - prev_avg*0.1,
-  upper_th = prev_avg + prev_avg*0.1
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-out1_data[ Value>=50000000 & yieldCheck == TRUE |  Value>=50000000 & is.na(yieldCheck), `:=`(
-  lower_th = prev_avg - prev_avg*0.1,
-  upper_th = prev_avg + prev_avg*0.1
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-dbg_print("End of strict criteria")
-#
-                                              
-                                              ######################################
-                                              #                                    #
-                                              #                                    #
-                                              #          SOFT CRITERIA             #
-                                              #                                    #
-                                              #                                    #
-                                              ######################################
-#dovrei aggiungere come filtro a ogni check: | Value >= 100 & Value < 1000 & measuredElement %in% "5111"
-
-out1_data[Value < 100 & yieldCheck == FALSE, `:=`(
-  lower_th = prev_avg - prev_avg*9,
-  upper_th = prev_avg + prev_avg*9
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-
-out1_data[ Value >= 100 & Value < 1000 & yieldCheck == FALSE, `:=`(
-  lower_th = prev_avg - prev_avg*5,
-  upper_th = prev_avg + prev_avg*5
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-
-out1_data[ Value >= 1000 & Value < 10000 & yieldCheck == FALSE, `:=`(
-  lower_th = prev_avg - prev_avg*1,
-  upper_th = prev_avg + prev_avg*1
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-out1_data[ Value >= 10000 & Value < 50000 & yieldCheck == FALSE, `:=`(
-  lower_th = prev_avg - prev_avg*0.6,
-  upper_th = prev_avg + prev_avg*0.6
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-out1_data[ Value >= 50000 & Value < 100000 & yieldCheck == FALSE, `:=`(
-  lower_th = prev_avg - prev_avg*0.6,
-  upper_th = prev_avg + prev_avg*0.6
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-out1_data[ Value >= 100000 & Value < 500000 & yieldCheck == FALSE, `:=`(
-  lower_th = prev_avg - prev_avg*0.5,
-  upper_th = prev_avg + prev_avg*0.5
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-out1_data[ Value >= 500000 & Value < 1000000 & yieldCheck == FALSE, `:=`(
-  lower_th = prev_avg - prev_avg*0.4,
-  upper_th = prev_avg + prev_avg*0.4
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-out1_data[ Value >= 1000000 & Value < 3000000 & yieldCheck == FALSE, `:=`(
-  lower_th = prev_avg - prev_avg*0.4,
-  upper_th = prev_avg + prev_avg*0.4
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-out1_data[ Value >= 3000000 & Value < 20000000 & yieldCheck == FALSE, `:=`(
-  lower_th = prev_avg - prev_avg*0.3,
-  upper_th = prev_avg + prev_avg*0.3
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-out1_data[ Value >= 20000000 & Value < 50000000 & yieldCheck == FALSE, `:=`(
-  lower_th = prev_avg - prev_avg*0.15,
-  upper_th = prev_avg + prev_avg*0.15
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-out1_data[ Value>=50000000 & yieldCheck == FALSE, `:=`(
-  lower_th = prev_avg - prev_avg*0.1,
-  upper_th = prev_avg + prev_avg*0.1
-),
-by = c("geographicAreaM49","measuredElement","measuredItemCPC")]
-
-####################################################FINAL CHECK#####################################################
-out1_data[,outCheck:=ifelse(Value <lower_th & flagObservationStatus %in% c("","T","E") |
-                            Value > upper_th & flagObservationStatus %in% c("","T","E"),TRUE,FALSE)]
-
-out1_data[(prev_avg/Value) > 9 & flagObservationStatus %in% c("","T","E"),outCheck:=TRUE]
-
-out1_data[Value < 1000 & prev_avg < 1000 & yieldCheck == FALSE,outCheck:=FALSE]
-#if prev_avg / Value > 9, outCheck := TRUE
-
-#out1_data[,softCheck:=ifelse(Value <lower_soft_th | Value > upper_soft_th,TRUE,FALSE)]
-#strict <- out1_data[outCheck == TRUE,]
-#soft <- out1_data[softCheck == TRUE,]
 dbg_print("Outliers final check ended")
-#outlier_file <- out1_data[outCheck==TRUE,]
-outlier_file <- copy(out1_data) 
 
-setnames(outlier_file, "prev_avg", "moving_average_3_years")
+#CLEANING DATASET SHAPE
 
-#outlier_file[, c("avg","outCheck"):= NULL]
+if(nrow(out1_data)>0 & nrow(out2_data)>0){
+    
+    out1_data[, c("avg","yield_lower_th","yield_upper_th","lower_th","upper_th","yieldCheck"):= NULL]
+    
+    out2_data[, c("avg","lower_th","upper_th"):= NULL]
+    
+    outlier_file <- rbind(out1_data,out2_data) 
+    
+}else if(nrow(out1_data)>0 & nrow(out2_data)==0){
+    
+    out1_data[, c("avg","yield_lower_th","yield_upper_th","lower_th","upper_th","yieldCheck"):= NULL]
+    
+    outlier_file <- copy(out1_data)
+    
+}else if(nrow(out1_data)==0 & nrow(out2_data)>0){
+    
+    out2_data[, c("avg","lower_th","upper_th"):= NULL]
+    
+    outlier_file <- copy(out2_data)
 
-
-#outlier_file[, c("softCheck","outCheck"):= NULL]
-outlier_file <- outlier_file[outCheck==TRUE,]
-
-outlier_file[, c("avg","yield_lower_th","yield_upper_th","lower_th","upper_th","outCheck"):= NULL]
-
-outlier_file <- nameData("aproduction", "aproduction", outlier_file, except = "timePointYears")
-
-#######convert format separator of thousands
-#outlier_file$Value= format(outlier_file$Value,big.mark=",",nsmall=2,scientific = F)
-outlier_file$Value = format(round(outlier_file$Value, 0),nsmall=0 , big.mark=",",scientific=FALSE)
-
-outlier_file$moving_average_3_years = format(round(outlier_file$moving_average_3_years, 0),nsmall=0 , big.mark=",",scientific=FALSE)
-#c("5421","5417","5424","5417","5422")
-
-outlier_file = outlier_file[measuredElement %!in% c("5421","5417","5424","5417","5422"),]
-
-
-#order by item
-outlier_file = outlier_file[order(measuredItemCPC),]
-
-setnames(outlier_file, "yieldCheck","Comments")
-
-
-
-                                              ######################################
-                                              #                                    #
-                                              #                                    #
-                                              #          FLAG CONTROL              #
-                                              #                                    #
-                                              #                                    #
-                                              ######################################
-#5 if 2016 o 2017 o 18 average is positive and flag blank o T (off / semi off) e 2019 is.null  -> colore viola
-
-flag_elements <- c("5510","5312","5111","5315","5112","5316","5320","5321","5314","5319","5318","5313")
-
-flag_data <- data_final[measuredElement %in% flag_elements,]
-
-#flag_data[, flagOld := NA_character_]
-#
-flag_data[,flagOld:=ifelse(timePointYears %in% c("2014","2015","2016") & flagObservationStatus %in% c("","T"),TRUE,FALSE),
-          by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
-
-
-
-#flag_data[, offOld := NA_character_]
-
-flag_data[, offOld:= ifelse(sum(flagOld) >=1 ,TRUE,FALSE),
-          by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
-
-
-flag_data[,flagNew:=ifelse(timePointYears %in% c("2017","2018","2019") & flagObservationStatus %in% c("I","E"),TRUE,FALSE),
-          by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
-
-
-flag_data[, offNew:= ifelse(sum(flagNew) >=1 ,TRUE,FALSE),
-          by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
-
-flag_data[, flagCheck:= ifelse(offOld==TRUE & offNew ==TRUE ,TRUE,FALSE),
-          by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
-
-
-missing_official_flag <- flag_data[flagCheck == TRUE,]
-
-missing_official_flag$Value = format(round(missing_official_flag$Value, 0),nsmall=0 , big.mark=",",scientific=FALSE)
-
-#togli i decimali e controllo di 2019 NA
-missing_official_flag$Value<- paste(missing_official_flag$Value,missing_official_flag$flagObservationStatus,
-                                    missing_official_flag$flagMethod)
-
-
-missing_official_flag <-missing_official_flag[, c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears","Value"),
-                                              with= FALSE]
-
-if(nrow(missing_official_flag) != 0){
-  
-  missing_flag_cast <- dcast(missing_official_flag, geographicAreaM49 + measuredElement + measuredItemCPC  ~ timePointYears, 
-                             value.var = c("Value"))
-  
-  
-  
-  missing_flag_cast <- nameData("aproduction", "aproduction", missing_flag_cast)
-  
 }else{
-  
-  missing_flag_cast <- data.table()
+    
+    outlier_file <- data.table()
 }
 
 
-                                          
-                                          ######################################
-                                          #                                    #
-                                          #                                    #
-                                          #          2019 missing              #
-                                          #                                    #
-                                          #                                    #
-                                          ######################################
+#COPYING FOR LATER
+productivity_to_save <- copy(outlier_file)
 
-miss_last_year <- data_final[measuredElement %in% flag_elements,]
+if(nrow(outlier_file) > 0){
 
-miss_last_year[,
-      `:=`(
-        mean = mean(Value[timePointYears %in% c("2014","2015","2016","2017","2018")], na.rm = TRUE)
-      ),
-      by = c("geographicAreaM49", "measuredItemCPC", "measuredElement")
-      ]
+    setnames(outlier_file, "prev_avg", "moving_average_3_years")
+    
+    #outlier_file[, c("avg","outCheck"):= NULL]
+    
+    
+    #outlier_file[, c("softCheck","outCheck"):= NULL]
+    outlier_file <- outlier_file[outCheck==TRUE,]
+    
+    
+    
+    outlier_file <- nameData("aproduction", "aproduction", outlier_file, except = "timePointYears")
+    
+    outlier_file <- outlier_file[!flagMethod == "c",]
+    
+    
+    outlier_file <- outlier_file[measuredElement %!in% c("5421","5417","5424","5417","5422","5077"),]
+    
+    outlier_file[, c("outCheck"):= NULL]
+    
+    
+    
+    outlier_file[,Comments := ifelse(Value >1000 & abs(moving_average_3_years/Value)> 5 |
+                                         Value >1000 & abs(Value/moving_average_3_years)> 5, "YELLOW", NA_character_)]
+    
+    
+    outlier_file[,Comments := ifelse(moving_average_3_years > 1000 & abs(moving_average_3_years/Value)> 5 |
+                                    moving_average_3_years > 1000 & abs(Value/moving_average_3_years)> 5, "YELLOW", Comments)]
+    
+    outlier_file[,Comments := ifelse(Value > 5000000 & abs(moving_average_3_years/Value)> 2 |
+                                         Value > 5000000 & abs(Value/moving_average_3_years)> 2, "YELLOW", Comments)]
+    
+    outlier_file[,Comments := ifelse(moving_average_3_years > 5000000 & abs(moving_average_3_years/Value)> 2 |
+                                         moving_average_3_years > 5000000 & abs(Value/moving_average_3_years)> 2, "YELLOW", Comments)]
+    
+    
+    outlier_file[,Comments := ifelse(Value >50000000 & abs((Value/moving_average_3_years)-1)> 0.2, "RED", Comments)]
+    
+    outlier_file[,Comments := ifelse(moving_average_3_years >50000000 & abs((Value/moving_average_3_years)-1)> 0.2, "RED", Comments)]
+    
+    outlier_file$Value = format(round(outlier_file$Value, 0),nsmall=0 , big.mark=",",scientific=FALSE)
+    
+    outlier_file$moving_average_3_years = format(round(outlier_file$moving_average_3_years, 0),nsmall=0 , big.mark=",",scientific=FALSE)
+    
+    #order by item
+    outlier_file = outlier_file[order(measuredItemCPC),]
+}else{
+    outlier_file <- copy(outlier_file)
+}
 
-##prendo solo quelli che hanno media passata diversa da na quinid per cui ci sono i valori
-miss_last_year = miss_last_year[!is.na(mean),]
-no_data = miss_last_year[is.na(mean),]
-#per ogni item c e il 2019 ?
-#devi anche dire se è official flag
-miss_last_year[, exists:= ifelse(timePointYears %in% c("2019") ,TRUE,FALSE),
-          by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
+################################################
+#                                              #
+#                                              #
+#               MISSING LAST YEAR              #
+#                                              #
+#                                              #
+################################################
 
-miss_last_year[, exists:= ifelse(sum(exists) ==1 ,TRUE,FALSE),
-               by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
+if(nrow(final_complete_triplet)>0 & nrow(final_partial_triplet)>0){
+    
+    #miss_last_year <- rbind(final_complete_triplet,final_partial_triplet)
+    
+    miss_last_year <- rbind(final_complete_triplet[! final_partial_triplet , on = c("measuredElement","geographicAreaM49",
+                                                                                           "timePointYears", "measuredItemCPC")], final_partial_triplet)
+    #miss_last_year <- unique(miss_last_year)
+
+}else if(nrow(final_complete_triplet)>0 & nrow(final_partial_triplet)==0){
+    
+    miss_last_year <- copy(final_complete_triplet)
+    
+
+}else if(nrow(final_complete_triplet)==0 & nrow(final_partial_triplet)>0){
+    
+    miss_last_year <- copy(final_partial_triplet)
+
+}else{
+    
+    miss_last_year <- data.table()
+}
 
 
-miss_last_year = miss_last_year[exists==FALSE & flagObservationStatus %in% c("","T"),]
+miss_last_year <- copy(data_backup)
 
-miss_last_year$Value = format(round(miss_last_year$Value, 0),nsmall=0 , big.mark=",",scientific=FALSE)
+if(nrow(miss_last_year)>0){
 
-miss_last_year$Value<- paste(miss_last_year$Value,miss_last_year$flagObservationStatus,
-                             miss_last_year$flagMethod)
+    flag_elements <- c("5510","5312","5111","5315","5112","5316","5320","5321","5314","5319","5318","5313")
+    
+    miss_last_year <- miss_last_year[measuredElement %in% flag_elements,]
+    
+    miss_last_year[,
+                   `:=`(
+                       mean = mean(Value[timePointYears %in% as.character((startYear-1) : (endYear-1))], na.rm = TRUE)
+                   ),
+                   by = c("geographicAreaM49", "measuredItemCPC", "measuredElement")
+                   ]
+    
+    ##prendo solo quelli che hanno media passata diversa da na quinid per cui ci sono i valori
+    miss_last_year = miss_last_year[!is.na(mean),]
+    
+    #per ogni item c e il 2019 ?
+    #devi anche dire se è official flag
+    miss_last_year[, exists:= ifelse(timePointYears %in% as.character(endYear),TRUE,FALSE),
+                   by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
+    
+    miss_last_year[, exists:= ifelse(sum(exists) ==1 ,TRUE,FALSE),
+                   by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
+    
+    
+    miss_last_year[, official:= ifelse(flagObservationStatus %in% c("","T") & 
+                                           timePointYears %in% as.character((startYear-1) : (endYear-1)),TRUE,FALSE),]
+    
+    miss_last_year[, official:= ifelse(sum(official) >1 ,TRUE,FALSE),
+                   by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
+    
+    
+    miss_last_year = miss_last_year[exists==FALSE & official == TRUE,]
+    
+    miss_last_year[, c("exists", "official","avg", "prev_avg", "mean"):= NULL]
+    
+    # miss_comb <- unique(miss_last_year[, .(measuredItemCPC, measuredElement)])
+    # 
+    # missing_imputations <- data.table(geographicAreaM49=character(), measuredElement=character(), measuredItemCPC=character(),
+    #                                     timePointYears=character(),Value=numeric(),flagObservationStatus=character(),
+    #                                     flagMethod=character())
+    # 
+    # for (i in 1:length(c(miss_comb)$measuredItemCPC)){
+    #     missing_imputations <- rbind( missing_imputations,
+    #                                    data_backup[measuredItemCPC %in% c(miss_comb)$measuredItemCPC[i]&
+    #                                             measuredElement %in% c(miss_comb)$measuredElement[i],] )
+    #     i = i+1
+    # }
+    # 
+    # livestock_partial_data <- rbind(live_partial_historic[! livestock_partial_data, on = c("measuredElement","geographicAreaM49",
+    #                                                                                        "timePointYears", "measuredItemCPC")], livestock_partial_data)
+    # 
+    # 
+    # missing_imputations <- data_backup[measuredItemCPC %in% unique(miss_last_year[, measuredItemCPC]),]
+    # 
+    # missing_imputations <- missing_imputations[measuredElement %in% flag_elements,]
+    # 
+    # miss_last_year <- rbind(miss_last_year[! missing_imputations, on = c("measuredElement","geographicAreaM49",
+    #                                              "timePointYears", "measuredItemCPC")], missing_imputations)
+    
+    miss_last_year$Value = format(round(miss_last_year$Value, 0),nsmall=0 , big.mark=",",scientific=FALSE)
+    
+    miss_last_year$Value<- paste(miss_last_year$Value,miss_last_year$flagObservationStatus,
+                                 miss_last_year$flagMethod)
+    
+    
+    miss_last_year <-miss_last_year[, c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears","Value"),
+                                    with= FALSE]
 
-
-miss_last_year <-miss_last_year[, c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears","Value"),
-                                              with= FALSE]
+}else{
+    miss_last_year <- data.table()
+}
 
 if(nrow(miss_last_year) != 0){
-  miss_last_year_cast <- dcast(miss_last_year, geographicAreaM49 + measuredElement + measuredItemCPC  ~ timePointYears, 
-                               value.var = c("Value"))
-  
-  #setnames(miss_last_year_cast,tail(names(miss_last_year_cast), n=1), "")
-  #tail(names(miss_last_year_cast), n=1)
-  #last_year <- as.numeric(tail(names(miss_last_year_cast), n=1))
-    if(tail(names(miss_last_year_cast), n=1) == "2018"){
-      
-      miss_last_year_cast <- miss_last_year_cast[!is.na(`2018`),]
-      
-      miss_last_year_cast <- nameData("aproduction", "aproduction", miss_last_year_cast)
     
+  
+    miss_last_year_cast <- dcast(miss_last_year, geographicAreaM49 + measuredElement + measuredItemCPC  ~ timePointYears, 
+                                 value.var = "Value")
+    
+    #setnames(miss_last_year_cast,tail(names(miss_last_year_cast), n=1), "")
+    #tail(names(miss_last_year_cast), n=1)
+    #last_year <- as.numeric(tail(names(miss_last_year_cast), n=1))
+    if(tail(names(miss_last_year_cast), n=1) == as.character(endYear-1)){
+        
+        #last_year <- paste0("`",endYear-1,"`")
+        #`2019`
+        names(miss_last_year_cast)[length(names(miss_last_year_cast))]<-"last_year" 
+        
+        miss_last_year_cast <- miss_last_year_cast[!is.na(last_year),]
+        #select all after first space
+        #sub(".*? ", "", "478,361 p")
+        #get string that contains p
+        #grepl("p", "T p", fixed = TRUE)
+        
+        nso_data <- miss_last_year_cast[grepl("p", last_year, fixed = T) & !grepl("T", last_year, fixed = T),]
+        
+        tp_data <- miss_last_year_cast[grepl("p", last_year, fixed = T) & grepl("T", last_year, fixed = T),]
+        
+        semi_official <- miss_last_year_cast[!grepl("p", last_year, fixed = T) & grepl("T", last_year, fixed = T),]
+        
+        others <- miss_last_year_cast[!grepl("p", last_year, fixed = T) & !grepl("T", last_year, fixed = T) &
+                                          !grepl("q", last_year, fixed = T),]
+        
+        quest_data <- miss_last_year_cast[grepl("q", last_year, fixed = T),]
+        
+        miss_last_year_cast <- rbind(nso_data, tp_data, semi_official, others, quest_data)
+        
+        names(miss_last_year_cast)[length(names(miss_last_year_cast))]<-as.character(endYear-1)
+        
+        miss_last_year_cast <- nameData("aproduction", "aproduction", miss_last_year_cast)
+        
+    }else if (tail(names(miss_last_year_cast), n=1) == as.character(endYear)) {
+        #nel caso in cui l ultimo anno della tabella è l'attuale end year e non endyear -1 segnalare il problem
+        error_message <- "ERROR IN MISSING LAST YEAR EXCEL SHEET. Please check this error"
+        
     }else{
-      miss_last_year_cast <- data.table()
+        
+        miss_last_year_cast <- data.table()
     }
-  }else{
+}else{
     
     miss_last_year_cast <- data.table()
     
 }
-  
 
+################
+#### SAVE     ##
+################
+#remove productivity figures related to meats
+productivity_to_save <- productivity_to_save[!(measuredItemCPC %in% liveStockItems_table$measuredItemChildCPC 
+                                       & measuredElement %in% c("5417","5424")),]
 
+productivity_to_save <- productivity_to_save[measuredElement %in% c("5421","5417","5424","5417","5422","5077"),]
 
+productivity_to_save[, c("outCheck", "prev_avg") := NULL]
 
-                                          ######################################
-                                          #                                    #
-                                          #                                    #
-                                          #          Yield saving              #
-                                          #                                    #
-                                          #                                    #
-                                          ######################################
+productivity_to_save <- productivity_to_save[!is.na(Value),]
+
+productivity_to_save <- as.data.table(productivity_to_save)
+
 dbg_print("Saving Yield figures")
 
-faosws::SaveData(
-  domain = "aproduction",
-  dataset = "aproduction",
-  data = data_prod_6,
-  waitTimeout = 20000)
+SaveData(
+    domain = "aproduction",
+    dataset = "aproduction",
+    data = productivity_to_save,
+    waitTimeout = 20000)
 
 dbg_print("Yield figures saved")
 
 
-
-                                          ######################################
-                                          #                                    #
-                                          #                                    #
-                                          #          WORKBOOOK file            #
-                                          #                                    #
-                                          #                                    #
-                                          ######################################
-
+######################
+#### WB CREATION    ##
+######################
 
 
 wb <- createWorkbook(USER)
 
 if(nrow(outlier_file) != 0){
-  
-  addWorksheet(wb, "Outlier_Production")
-  writeDataTable(wb, "Outlier_Production",outlier_file)
-  first_fill <- createStyle(fgFill = "red")
-  
-  second_fill <- createStyle(fgFill = "yellow")
-  
-  
-  
-  for (i in c(8)) {
-    addStyle(wb, "Outlier_Production", cols = i, 
-             rows = 1 + c((1:nrow(outlier_file))[outlier_file[[i+4]] == TRUE | 
-                                                   is.na(outlier_file[[i+4]])]), 
-             style = first_fill, gridExpand = TRUE)
-  }
-  
-  for (i in c(8)) {
-    addStyle(wb, "Outlier_Production", cols = i, 
-             rows = 1 + c((1:nrow(outlier_file))[outlier_file[[i+4]] == FALSE]), 
-             style = second_fill, gridExpand = TRUE, stack = TRUE)
-  }
-  
-  deleteData(wb, "Outlier_Production", cols = ncol(outlier_file), rows = 1:(nrow(outlier_file))+1, gridExpand = T)
+    
+    addWorksheet(wb, "Outlier_Production")
+    writeDataTable(wb, "Outlier_Production",outlier_file)
+    first_fill <- createStyle(fgFill = "red")
+    second_fill <- createStyle(fgFill = "yellow")
 
-}
+    # 8 is the position of the starting columns. We add 4 later, so we are manipulating the 12th column
+    for (i in c(8)) {
+        addStyle(wb, "Outlier_Production", cols = i, 
+                 rows = 1 + c((1:nrow(outlier_file))[outlier_file[[i+4]] == "RED"]), 
+                 style = first_fill, gridExpand = TRUE)
+    }
+    
+    for (i in c(8)) {
+        addStyle(wb, "Outlier_Production", cols = i, 
+                 rows = 1 + c((1:nrow(outlier_file))[outlier_file[[i+4]] == "YELLOW"]), 
+                 style = second_fill, gridExpand = TRUE)
+    }
 
-if(nrow(missing_flag_cast) != 0){
-  
-  addWorksheet(wb, "Official_flag_Lost")
-  writeDataTable(wb, "Official_flag_Lost",missing_flag_cast)
-  
+    
+    deleteData(wb, "Outlier_Production", cols = ncol(outlier_file), rows = 1:(nrow(outlier_file))+1, gridExpand = T)
+    
 }
 
 
 if(nrow(miss_last_year_cast) != 0){
-  
-  addWorksheet(wb, "Lost_in_2019")
-  writeDataTable(wb, "Lost_in_2019",miss_last_year_cast)
-  
+    
+    addWorksheet(wb, "Missing_last_year")
+    writeDataTable(wb, "Missing_last_year",miss_last_year_cast)
+    
 }
-
-#miss_last_year_cast
-
-
-#removeColWidths(wb, "Outlier_Production", cols = 12:17)
-
 # library(devtools)
 # Sys.setenv(PATH = paste("C:/Rtools/bin", Sys.getenv("PATH"), sep=";"))
 # Sys.setenv(BINPREF = "C:/Rtools/mingw_$(WIN)/bin/")
-# saveWorkbook(wb, file = "Russia_outlier.xlsx", overwrite = TRUE)
+# saveWorkbook(wb, file = "Arentina_outlier.xlsx", overwrite = TRUE)
+#se c e l'elemento slaughtered in dataset outlier lo tolgo qualora associato a item di carne 
+#(verificando che sia un doppione outlier == presente sia in animale che in carne)
 
+#segno in rosso solo quelli tanto grandi
+
+#I should remove slaughtered under meat if it is outlier twice!
+
+#1) Off take rates li salvi back to the dataset
+
+#2) slaughtered di carne copiato balnk c lo devo rimuovere prima del salvataggio
 
 saveWorkbook(wb, tmp_file_outliers, overwrite = TRUE)
 
-body_message = paste("Plugin completed. Production outliers official figures.
-                      ######### Colors description #########
-                      Red figures: Outlier values with Yield/Carcass out of the 30% given the last 3 years;
-                      Yellow figures: Outlier values with Yield/Carcass in range.
-                      ",
-                      sep='\n')
+
+#if( exists("error_message")){paste(error_message)}
+body_message = paste("Plugin completed. Production outliers official figures.", "",if( exists("error_message")){paste(error_message)},
+                     "",
+                     "**********************************************************************************
+                     ********** All the figures showed in the excel file need to be checked. **********
+                     **********************************************************************************
+                     + If red figures are present they indicate quantities > 20,000,000 tons with a */- 20% jump from its past average
+                     + If yellow figures are present they may indicate a value > 10,000,000 greater than 2 times its previous average or 
+                     + a value > 1,000 greater than 5 times its previous average",
+                     sep='\n')
 
 send_mail(from = "no-reply@fao.org", 
           to = swsContext.userEmail,
@@ -1213,8 +1424,4 @@ send_mail(from = "no-reply@fao.org",
 unlink(TMP_DIR, recursive = TRUE)
 
 print('Plug-in Completed')
-
-
-
-
 
