@@ -1,3 +1,21 @@
+##' 
+##'
+##' **Author: Livia Lombardi**
+##' 
+##' **Description:**
+##'
+##' This module is designed to identify outliers values in the production domain. It has been designed thinking of a detection
+##' right after the questionnaire upload. The routine includes the yield and off take rate re-calculation. The detection is 
+##' performed separately on single series from series where official data are presente entirely for the triplet (e.g. questionnaire
+##' values are present from the APQ for both production and area harvested). Lastly the module detect if an item use to be reported
+##' by the country or collected form other sources and is currently missing
+
+
+
+
+
+
+
 library(faosws)
 library(faoswsUtil)
 library(dplyr)
