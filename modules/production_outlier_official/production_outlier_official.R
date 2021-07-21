@@ -522,9 +522,9 @@ cpc_cluster <- ReadDatatable("cpc_validation_production")
 proxy_cluster <- ReadDatatable("utilization_table_2018")
 proxy_cluster <- proxy_cluster[proxy_primary %in% "X",]
 #ELEMENTS: let get the triplets needed:
-#o tutti da chiave
+
 #measuredElement = Dimension("measuredElement", GetCodeList("aproduction", "aproduction", "measuredElement")$code)
-#Da prendere poi unique(ELEMENTS) in the POST CALL
+
 ELEMENTS <- c("5312","5510","5421",#crops: Area Harvested, Production, Yields 
               "5111","5315","5417",#Big animals: stocks, slaughtered, Yield/Carcass
               "5112","5316","5424",#Small animals: stocks, slaughtered, Yield/Carcass
@@ -692,7 +692,7 @@ for (i in 1:length(c(not_live_partial_comb)$measuredItemCPC)){
 not_livestock_partial_data <- rbind(not_live_partial_historic[! not_livestock_partial_data, on = c("measuredElement","geographicAreaM49",
                                                                  "timePointYears", "measuredItemCPC")], not_livestock_partial_data)
 
-#vedi diff tra not live partial data e historical
+
 
 
 #############################################################################
@@ -882,7 +882,7 @@ if(nrow(final_complete_triplet) > 0){
     #                                    #
     #                                    #
     ######################################
-    #dovrei aggiungere come filtro a ogni check: | Value >= 100 & Value < 1000 & measuredElement %in% "5111"
+
     
     out1_data[Value < 100 & yieldCheck == FALSE, `:=`(
         lower_th = prev_avg - prev_avg*9,
@@ -996,7 +996,7 @@ if(nrow(final_partial_triplet)>0){
     #                                    #
     #                                    #
     ######################################
-    #dovrei aggiungere come filtro a ogni check: | Value >= 100 & Value < 1000 & measuredElement %in% "5111"
+   
     
     out2_data[Value < 100, `:=`(
         lower_th = prev_avg - prev_avg*9,
@@ -1210,11 +1210,11 @@ if(nrow(miss_last_year)>0){
                    by = c("geographicAreaM49", "measuredItemCPC", "measuredElement")
                    ]
     
-    ##prendo solo quelli che hanno media passata diversa da na quinid per cui ci sono i valori
+    ##I take only data with previous average != na and so with present values
     miss_last_year = miss_last_year[!is.na(mean),]
     
-    #per ogni item c e il 2019 ?
-    #devi anche dire se è official flag
+
+
     miss_last_year[, exists:= ifelse(timePointYears %in% as.character(endYear),TRUE,FALSE),
                    by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
     
@@ -1391,16 +1391,7 @@ if(nrow(miss_last_year_cast) != 0){
 # Sys.setenv(PATH = paste("C:/Rtools/bin", Sys.getenv("PATH"), sep=";"))
 # Sys.setenv(BINPREF = "C:/Rtools/mingw_$(WIN)/bin/")
 # saveWorkbook(wb, file = "Arentina_outlier.xlsx", overwrite = TRUE)
-#se c e l'elemento slaughtered in dataset outlier lo tolgo qualora associato a item di carne 
-#(verificando che sia un doppione outlier == presente sia in animale che in carne)
 
-#segno in rosso solo quelli tanto grandi
-
-#I should remove slaughtered under meat if it is outlier twice!
-
-#1) Off take rates li salvi back to the dataset
-
-#2) slaughtered di carne copiato balnk c lo devo rimuovere prima del salvataggio
 
 saveWorkbook(wb, tmp_file_outliers, overwrite = TRUE)
 
