@@ -67,15 +67,14 @@ for (iter in seq(sessionItems)) {
         
          currentItem <- sessionItems[iter]
         
+
+        # suppressMessages({
+        #     formulaTable <-
+        #     getProductionFormula(itemCode = currentItem) %>%
+        #     removeIndigenousBiologicalMeat(formula = .)
+        # })
         
-        ## Obtain the formula and remove indigenous and biological meat.
-
-        suppressMessages({
-            formulaTable <-
-            getProductionFormula(itemCode = currentItem) %>%
-            removeIndigenousBiologicalMeat(formula = .)
-        })
-
+        suppressWarnings(formulaTable <- removeIndigenousBiologicalMeat(getProductionFormula(currentItem)))
         
         if (nrow(formulaTable) > 1) {
             stop("Imputation should only use one formula")
@@ -139,6 +138,14 @@ for (iter in seq(sessionItems)) {
                 c(formulaParameters$yieldMethodFlag),
                 list(processingParameters$missingValueMethodFlag))
             ]
+
+        if (typeof(processedData[, formulaParameters$yieldValue]) == "character"){
+
+            processedData[, formulaParameters$yieldValue := NULL]
+
+            processedData[, formulaParameters$yieldValue:= NA_real_]
+
+        }
         
         computed_Data = computeYield(processedData,
                                  processingParameters = processingParameters,
