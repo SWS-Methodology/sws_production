@@ -1216,8 +1216,8 @@ if(nrow(final_complete_triplet)>0 & nrow(final_partial_triplet)>0){
 miss_last_year <- copy(data_backup)
 
 if(nrow(miss_last_year)>0){
-
-    flag_elements <- c("5510","5312","5111","5315","5112","5316","5320","5321","5314","5319","5318","5313")
+    #remove "5320","5321"
+    flag_elements <- c("5510","5312","5111","5315","5112","5316","5314","5319","5318","5313")
     
     miss_last_year <- miss_last_year[measuredElement %in% flag_elements,]
     
@@ -1344,6 +1344,8 @@ if(nrow(miss_last_year) != 0){
 #### SAVE     ##
 ################
 #remove productivity figures related to meats
+if(nrow(productivity_to_save) > 0){
+
 productivity_to_save <- productivity_to_save[!(measuredItemCPC %in% liveStockItems_table$measuredItemChildCPC 
                                        & measuredElement %in% c("5417","5424")),]
 
@@ -1365,7 +1367,7 @@ SaveData(
 
 dbg_print("Yield figures saved")
 
-
+}
 ######################
 #### WB CREATION    ##
 ######################
@@ -1408,7 +1410,7 @@ if(nrow(miss_last_year_cast) != 0){
 # library(devtools)
 # Sys.setenv(PATH = paste("C:/Rtools/bin", Sys.getenv("PATH"), sep=";"))
 # Sys.setenv(BINPREF = "C:/Rtools/mingw_$(WIN)/bin/")
-# saveWorkbook(wb, file = "Arentina_outlier.xlsx", overwrite = TRUE)
+# saveWorkbook(wb, file = "Animals_outliers.xlsx", overwrite = TRUE)
 
 
 saveWorkbook(wb, tmp_file_outliers, overwrite = TRUE)
