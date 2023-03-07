@@ -129,7 +129,10 @@ setnames(vop_country_group, "m49_code", "geographicAreaM49")
 
 message(paste('Your Value of Agricultural Production Plugin is pulling data.'))
 
-## Get production data
+
+## Get production data ---------------------------------------------------------
+
+
 # Pull data from production/disseminated data
 
 if (param_source_prod == "production"){ 
@@ -159,12 +162,17 @@ if ( "154" %in% selected_element ) {
 }  
   
 
-# Removing leading zeroes
+
+# Removing leading zeroes ------------------------------------------------------
+
+
 vop_country[, geographicAreaM49 := sub( "^0+","", geographicAreaM49 )]
 vop_country_group[, geographicAreaM49 := sub( "^0+","", geographicAreaM49 )]
 
 
-### Get prices data
+
+### Get prices data ------------------------------------------------------------
+
 
 if (param_source_prices == "prices"){ 
   
@@ -297,7 +305,7 @@ if ("58" %in% selected_element) {
 }
 
 
-## Calculation -------------------------------------------------------------
+## Calculation -----------------------------------------------------------------
 
 gross_production_value <- do.call("rbind", data_price)
 rm(data_price)
@@ -310,7 +318,9 @@ gross_production_value[,  c('Production', 'Prices') := NULL]
 
 
 
-### PINs ####
+
+## Production Indices (PINs) --------------------------------------------------- 
+
 
 if ("432" %in% selected_element | "434" %in% selected_element ) {
 
@@ -373,7 +383,9 @@ if ("432" %in% selected_element) {
 }
 
 
-#### Gross per Capita Production Index Number '434'
+
+#### Gross per Capita Production Index Number '434 ####
+
   
 # function to pull Population data (item code 3010, element code 511)  from "disseminated" Domain, "population_disseminated" Dataset
 
@@ -448,7 +460,9 @@ gross_production_value <- gross_production_value[is.finite(Value)]
 
 
 
-#### Aggregate for items groups ####
+
+#### Aggregate for items groups ------------------------------------------------
+
 
 if (param_item_aggr != "item_single" ) {
   
@@ -506,7 +520,9 @@ message(paste('Your Value of Agricultural Production Plugin is calculating item-
                                                                                  by = c('measuredElement','geographicAreaM49', 'timePointYears', 'item_group_code')]
   }
   
-  # Aggregate for PINs
+
+  # Aggregate for PINs ---------------------------------------------------------
+
   
   if ( "432" %in% selected_element){
     
@@ -550,7 +566,9 @@ message(paste('Your Value of Agricultural Production Plugin is calculating item-
   
 }
 
-#### Aggregate for Countries groups ####
+
+#### Aggregate for Countries groups ------------------------------------------------------
+
 
 #### Country Aggregate Fix ############################################################################
 # Fixing country aggregate parameter to Single item since country aggregates cannot be saved in SWS ###
@@ -632,9 +650,12 @@ if ( "434" %in% selected_element){
 }
 
 
-#### Aggregate for Item groups - Countries groups ####
 
-gross_production_value_country_item_aggregate <- merge(gross_production_value_item_aggregate[! measuredElement %in% c("432","434")], vop_country_group, by = "geographicAreaM49", allow.cartesian = TRUE)
+#### Aggregate for Item groups - Countries groups ------------------------------------------------------
+
+gross_production_value_country_item_aggregate <- merge(gross_production_value_item_aggregate[! measuredElement %in% c("432","434")],
+                                                       vop_country_group, by = "geographicAreaM49", allow.cartesian = TRUE)
+
 
 
 gross_production_value_country_item_aggregate <- merge(gross_production_value_country_item_aggregate,
@@ -702,7 +723,9 @@ setnames(gross_production_value_country_aggregate, 'country_group_code', "geogra
 setnames(gross_production_value_country_item_aggregate, c('item_group_code','country_group_code'), c("measuredItemCPC", "geographicAreaM49"))
 }#end Country aggregate
 
-### setting names for aggregates
+
+### setting names for aggregates ------------------------------------------------------
+
 
 if (param_item_aggr != "item_single" ) {
 setnames(gross_production_value_item_aggregate, 'item_group_code', "measuredItemCPC")
@@ -711,7 +734,9 @@ setnames(gross_production_value_item_aggregate, 'item_group_code', "measuredItem
 
 
 
-## Saving data
+
+## Saving data -----------------------------------------------------------------
+
 
 message(paste0("Your Value of Agricultural Production Plugin is saving data."))
 
@@ -775,7 +800,10 @@ if (any(c('55','58','152','154', '432', '434') %in% selected_element)) {
 }
 
 
-# Update LOG table
+
+# Update LOG table -------------------------------------------------------------
+
+
 LOG_table <- "value_of_agricultural_production_log"
 
 LOG = data.table( user_ = swsContext.userEmail,
