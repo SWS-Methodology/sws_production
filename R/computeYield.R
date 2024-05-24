@@ -110,15 +110,15 @@ computeYield = function(data,
     
     
     
-    
-    MdashAreaHarvested= dataCopy[,get(formulaParameters$areaHarvestedObservationFlag)==processingParameters$missingValueObservationFlag
-                                 & get(formulaParameters$areaHarvestedMethodFlag)=="-"]
-    
-    blockFilterAreaHarv= MdashAreaHarvested & missingYield
-    
-    dataCopy[blockFilterAreaHarv ,
-             `:=`(c(formulaParameters$yieldValue,formulaParameters$yieldObservationFlag,formulaParameters$yieldMethodFlag),
-                  list(NA_real_,processingParameters$missingValueObservationFlag, "-"))]
+    # 
+    # MdashAreaHarvested= dataCopy[,get(formulaParameters$areaHarvestedObservationFlag)==processingParameters$missingValueObservationFlag
+    #                              & get(formulaParameters$areaHarvestedMethodFlag)=="-"]
+    # 
+    # blockFilterAreaHarv= MdashAreaHarvested & missingYield
+    # 
+    # dataCopy[blockFilterAreaHarv ,
+    #          `:=`(c(formulaParameters$yieldValue,formulaParameters$yieldObservationFlag,formulaParameters$yieldMethodFlag),
+    #               list(NA_real_,processingParameters$missingValueObservationFlag, "-"))]
     
     return(dataCopy)
 }
