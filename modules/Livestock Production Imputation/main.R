@@ -369,13 +369,14 @@ if (CheckDebug()) {
     
     library(faoswsModules)
     
-    SETTINGS <- ReadSettings("modules/animal_stockFRANCESCA/sws.yml")
+    SETTINGS <- ReadSettings("C:/Users/lombardi/OneDrive - Food and Agriculture Organization/Livia/faoswsProduction/modules/Livestock Production Imputation/sws.yml")
     
     ## If you're not on the system, your settings will overwrite any others
     R_SWS_SHARE_PATH <- SETTINGS[["share"]]
     
     ## Define where your certificates are stored
     SetClientFiles(SETTINGS[["certdir"]])
+    #SetClientFiles("C:/Users/Lombardili/OneDrive - Food and Agriculture Organization/Livia/certificates/production")
     
     ## Get session information from SWS. Token must be obtained from web interface
     GetTestEnvironment(SETTINGS[["server"]], SETTINGS[["token"]])
@@ -712,7 +713,7 @@ for (iter in seq(selectedMeatCode)) {
         
         stockImputed <- imputeVariable(animalData, imputationParameters = animalStockImputationParameters)
         
-        
+        #M- issue
         ##---------------------------------------------------------------------------------------------------------
         
         ##Pull slaughtered Animail (code referrig to ANIMAL)
@@ -784,6 +785,29 @@ for (iter in seq(selectedMeatCode)) {
                 FormulaParameters = animalFormulaParameters
             )
         
+        # re assign M- to slaughtered values since the function computeToSlaughtered is turning M- to Mu
+        slaughteredParentData <- merge(slaughteredParentData, stockSlaughtered[, list(geographicAreaM49,measuredItemCPC,timePointYears,
+                                                                                        flagObservationStatus_measuredElement_sl_original = get(paste0(animalFormulaParameters$areaHarvestedObservationFlag)),
+                                                                                        flagMethod_measuredElement_sl_original =get(paste0(animalFormulaParameters$areaHarvestedMethodFlag)))], 
+                                         by= c("geographicAreaM49","measuredItemCPC","timePointYears"),
+                                         all.x = TRUE)
+        
+        slaughteredParentData[flagObservationStatus_measuredElement_sl_original == "M" &
+                                    flagMethod_measuredElement_sl_original == "-", 
+                               animalFormulaParameters$areaHarvestedValue := NA]
+        
+        slaughteredParentData[flagObservationStatus_measuredElement_sl_original == "M" &
+                                  flagMethod_measuredElement_sl_original == "-",
+                              animalFormulaParameters$areaHarvestedObservationFlag := "M",]
+        
+        slaughteredParentData[flagObservationStatus_measuredElement_sl_original == "M" &
+                                  flagMethod_measuredElement_sl_original == "-",
+                              animalFormulaParameters$areaHarvestedMethodFlag := "-"]
+        
+        slaughteredParentData[, flagObservationStatus_measuredElement_sl_original:= NULL]
+        
+        slaughteredParentData[, flagMethod_measuredElement_sl_original:= NULL]
+        
         # Before Saving this data in the shared folder I change the off-take method flag which is: "i". It is now "c"
         # because it was useful to protect it.
         slaughteredParentData[TakeOffRateFlagMethod == "c", TakeOffRateFlagMethod := "i"]
@@ -813,7 +837,7 @@ for (iter in seq(selectedMeatCode)) {
                 slaughteredParentData,
                 removeNonExistingRecords = FALSE
             )
-        
+        #M- issue
         ##---------------------------------------------------------------------------------------------------------
         ## --------------------------------------------------------------------------------------------------------
         ## Check if all the slaughtered series have been imputed. If the animal stocks series is not present
@@ -1400,28 +1424,84 @@ for (iter in seq(selectedMeatCode)) {
         ProtectedOverwritten <- ProtectedOverwritten[measuredElement != imputationParameters$areaHarvestedParams$variable]
         
         ProtectedOverwritten <- ProtectedOverwritten[Value != i.Value]
-        
+        #saving data and pulling back the M- (if we want to just block withot pulling, just make it NA and remove it)
         if (eu_parameter == "no") {
             
             syncedData=syncedData[geographicAreaM49 %!in% eu_list, ]
             
+            data_to_save <- copy(syncedData)
+            
+            data_to_save[, M_first_year :=  max(as.numeric(timePointYears[flagObservationStatus %in% "M" & flagMethod %in% "-"])),
+                  by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
+            
+            # data_to_save[as.numeric(timePointYears) < as.numeric(M_first_year), `:=` (Value = 0 , flagObservationStatus = "M",
+            #                                                                  flagMethod = "-"),
+            #       by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
+            
+            data_to_save[, to_remove := FALSE]
+            
+            data_to_save[as.numeric(timePointYears) < as.numeric(M_first_year) & !(flagObservationStatus %in% "M" & flagMethod %in% "-"), 
+                         to_remove := TRUE,
+                         by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
+            
+            data_to_save <- data_to_save[to_remove == FALSE,]
+            
+            data_to_save[, to_remove := NULL]
+            
+            data_to_save[, M_first_year := NULL]
+            
             SaveData(domain = sessionKey@domain,
                      dataset = sessionKey@dataset,
-                     data =  syncedData)
+                     data =  data_to_save)
+            #if 0 M - have been pulled back, then fill up to 1991 for coherence: to discuss. if the 0 M- represent the start year of closure
+            # if(imputationStartYear > 1991){
+            #     
+            #     zeros_data <- copy(data_to_save)
+            #     
+            #     zeros_data <- zeros_data[!is.infinite(M_first_year), ]
+            #     
+            #     zeros_data_to_save <- zeros_data %>% distinct(geographicAreaM49,measuredItemCPC,measuredElement,M_first_year)
+            #     
+            #     zeros_data_to_save <- as.data.table(zeros_data_to_save)[,.(year=seq(1991,max(M_first_year))),by=.(geographicAreaM49,measuredItemCPC,measuredElement)]
+            #     
+            #     
+            # }else{
+            #     
+            #     data_to_save[, M_first_year := NULL]
+            #     
+            #     SaveData(domain = sessionKey@domain,
+            #              dataset = sessionKey@dataset,
+            #              data =  data_to_save)
+            #     
+            # }
             
-        }else if (eu_parameter == "yes"){
+          
             
-            SaveData(domain = sessionKey@domain,
-                     dataset = sessionKey@dataset,
-                     data =  syncedData)
         }else{
             
-            syncedData=syncedData[geographicAreaM49 %in% eu_list, ]
+            data_to_save <- copy(syncedData)
+            
+            data_to_save[, M_first_year :=  max(as.numeric(timePointYears[flagObservationStatus %in% "M" & flagMethod %in% "-"])),
+                         by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
+            
+            data_to_save[, to_remove := FALSE]
+            
+            data_to_save[as.numeric(timePointYears) < as.numeric(M_first_year) & !(flagObservationStatus %in% "M" & flagMethod %in% "-"), 
+                         to_remove := TRUE,
+                         by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
+            
+            data_to_save <- data_to_save[to_remove == FALSE,]
+            
+            
+            data_to_save[, to_remove := NULL]
+            
+            data_to_save[, M_first_year := NULL]
             
             SaveData(domain = sessionKey@domain,
                      dataset = sessionKey@dataset,
-                     data =  syncedData)
+                     data =  data_to_save)
             
+
         }
         
         
@@ -1662,29 +1742,56 @@ for (iter in seq(selectedMeatCode)) {
                 slaughteredTransferToNonMeatChildData <-
                     postProcessing(data = slaughteredTransferToNonMeatChildData)
                 
-                
+                #saving and cleaning data before any M- 
                 
                 if (eu_parameter == "no") {
                     
                     slaughteredTransferToNonMeatChildData=slaughteredTransferToNonMeatChildData[geographicAreaM49 %!in% eu_list, ]
                     
+                    slaughtered_save <- copy(slaughteredTransferToNonMeatChildData)
+                    
+                    slaughtered_save[, M_first_year :=  max(as.numeric(timePointYears[flagObservationStatus %in% "M" & flagMethod %in% "-"])),
+                                 by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
+                    
+                    slaughtered_save[, to_remove := FALSE]
+                    
+                    slaughtered_save[as.numeric(timePointYears) < as.numeric(M_first_year) & !(flagObservationStatus %in% "M" & flagMethod %in% "-"), 
+                                     to_remove := TRUE,
+                                 by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
+                    
+                    slaughtered_save <- slaughtered_save[to_remove == FALSE,]
+                    
+                    slaughtered_save[, to_remove := NULL]
+                    
+                    slaughtered_save[, M_first_year := NULL]
+                    
                     SaveData(domain = sessionKey@domain,
                              dataset = sessionKey@dataset,
-                             data =  slaughteredTransferToNonMeatChildData)
+                             data =  slaughtered_save)
+        
                     
-                } else if (eu_parameter == "yes") {
+                }else{
+                    
+                    slaughtered_save <- copy(slaughteredTransferToNonMeatChildData)
+                    
+                    slaughtered_save[, M_first_year :=  max(as.numeric(timePointYears[flagObservationStatus %in% "M" & flagMethod %in% "-"])),
+                                     by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
+                    
+                    slaughtered_save[, to_remove := FALSE]
+                    
+                    slaughtered_save[as.numeric(timePointYears) < as.numeric(M_first_year) & !(flagObservationStatus %in% "M" & flagMethod %in% "-"), 
+                                     to_remove := TRUE,
+                                     by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
+                    
+                    slaughtered_save <- slaughtered_save[to_remove == FALSE,]
+                    
+                    slaughtered_save[, to_remove := NULL]
+                    
+                    slaughtered_save[, M_first_year := NULL]
                     
                     SaveData(domain = sessionKey@domain,
                              dataset = sessionKey@dataset,
-                             data =  slaughteredTransferToNonMeatChildData)
-                } else {
-                    
-                    slaughteredTransferToNonMeatChildData=slaughteredTransferToNonMeatChildData[geographicAreaM49 %in% eu_list, ]
-                    
-                    SaveData(domain = sessionKey@domain,
-                             dataset = sessionKey@dataset,
-                             data =  slaughteredTransferToNonMeatChildData)
-                    
+                             data =  slaughtered_save)
                 }
                 #     SaveData(domain = sessionKey@domain,
                 #              dataset = sessionKey@dataset,

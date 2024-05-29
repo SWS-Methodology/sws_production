@@ -74,25 +74,25 @@ balanceProduction = function(data,
     
     ## If  yield or Area Harvested is (M,-) also production should be flagged as (M,-)
     
-    MdashYield =  dataCopy[,get(formulaParameters$yieldObservationFlag)==processingParameters$missingValueObservationFlag
-                                & get(formulaParameters$yieldMethodFlag)=="-"]
-    blockFilterYield= MdashYield & missingProduction
-    
-    dataCopy[blockFilterYield ,
-             `:=`(c(formulaParameters$productionValue,formulaParameters$productionObservationFlag,formulaParameters$productionMethodFlag),
-                  list(NA_real_,processingParameters$missingValueObservationFlag, "-"))]
-    
-    
-    
-    
-    MdashAreaHarvested= dataCopy[,get(formulaParameters$areaHarvestedObservationFlag)==processingParameters$missingValueObservationFlag
-                                 & get(formulaParameters$areaHarvestedMethodFlag)=="-"]
-    
-    blockFilterAreaHarv= MdashAreaHarvested & missingProduction
-    
-    dataCopy[blockFilterAreaHarv ,
-             `:=`(c(formulaParameters$productionValue,formulaParameters$productionObservationFlag,formulaParameters$productionMethodFlag),
-                  list(NA_real_,processingParameters$missingValueObservationFlag, "-"))]
+    # MdashYield =  dataCopy[,get(formulaParameters$yieldObservationFlag)==processingParameters$missingValueObservationFlag
+    #                             & get(formulaParameters$yieldMethodFlag)=="-"]
+    # blockFilterYield= MdashYield & missingProduction
+    # 
+    # dataCopy[blockFilterYield ,
+    #          `:=`(c(formulaParameters$productionValue,formulaParameters$productionObservationFlag,formulaParameters$productionMethodFlag),
+    #               list(NA_real_,processingParameters$missingValueObservationFlag, "-"))]
+    # 
+    # 
+    # 
+    # 
+    # MdashAreaHarvested= dataCopy[,get(formulaParameters$areaHarvestedObservationFlag)==processingParameters$missingValueObservationFlag
+    #                              & get(formulaParameters$areaHarvestedMethodFlag)=="-"]
+    # 
+    # blockFilterAreaHarv= MdashAreaHarvested & missingProduction
+    # 
+    # dataCopy[blockFilterAreaHarv ,
+    #          `:=`(c(formulaParameters$productionValue,formulaParameters$productionObservationFlag,formulaParameters$productionMethodFlag),
+    #               list(NA_real_,processingParameters$missingValueObservationFlag, "-"))]
     
     
     

@@ -97,15 +97,15 @@ balanceAreaHarvested = function(data,
     
     
     
-    MdashYield= dataCopy[,get(formulaParameters$yieldObservationFlag)==processingParameters$missingValueObservationFlag
-                                 & get(formulaParameters$yieldMethodFlag)=="-"]
-    
-    blockFilterYield= MdashYield & missingAreaHarvested
-    
-    dataCopy[blockFilterYield ,
-             `:=`(c(formulaParameters$areaHarvestedValue,formulaParameters$areaHarvestedObservationFlag,formulaParameters$areaHarvestedMethodFlag),
-                  list(NA_real_,processingParameters$missingValueObservationFlag, "-"))]
-    
+    # MdashYield= dataCopy[,get(formulaParameters$yieldObservationFlag)==processingParameters$missingValueObservationFlag
+    #                              & get(formulaParameters$yieldMethodFlag)=="-"]
+    # 
+    # blockFilterYield= MdashYield & missingAreaHarvested
+    # 
+    # dataCopy[blockFilterYield ,
+    #          `:=`(c(formulaParameters$areaHarvestedValue,formulaParameters$areaHarvestedObservationFlag,formulaParameters$areaHarvestedMethodFlag),
+    #               list(NA_real_,processingParameters$missingValueObservationFlag, "-"))]
+    # 
     
     
     
