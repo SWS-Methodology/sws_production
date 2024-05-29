@@ -112,12 +112,12 @@ d <- copy(data_p)
 
 d <- na.omit(d, cols="extraction")
 
-
-d[, check_parent := ifelse(measuredItemCPC %in% "02944" & measuredElement %in% "5510" & flagObservationStatus %in% c("", "T"),
+# Support old and new flags
+d[, check_parent := ifelse(measuredItemCPC %in% "02944" & measuredElement %in% "5510" & flagObservationStatus %in% c("A", "", "T", "X"),
                            TRUE, FALSE),
   by = c("geographicAreaM49", "timePointYears")]
-
-d[, check_child := ifelse(measuredItemCPC %in% "26110" & measuredElement %in% "5510" & flagObservationStatus %in% c("", "T"),
+# Support old and new flags
+d[, check_child := ifelse(measuredItemCPC %in% "26110" & measuredElement %in% "5510" & flagObservationStatus %in% c("A", "", "T", "X"),
                            TRUE, FALSE),
   by = c("geographicAreaM49", "timePointYears")]
 
@@ -133,10 +133,10 @@ d_cleaned <- d[geographicAreaM49 %!in% protected_countries,]
 
 d_cleaned[, check_both:= NULL]
 
-d_cleaned[, parent_value := Value[measuredItemCPC %in% "02944" & measuredElement %in% "5510" & flagObservationStatus %in% c("","T")],
+d_cleaned[, parent_value := Value[measuredItemCPC %in% "02944" & measuredElement %in% "5510" & flagObservationStatus %in% c("A", "", "T", "X")],
      by = c("geographicAreaM49", "timePointYears")]
 
-d_cleaned[, child_value := Value[measuredItemCPC %in% "26110" & measuredElement %in% "5510" & flagObservationStatus %in% c("","T")],
+d_cleaned[, child_value := Value[measuredItemCPC %in% "26110" & measuredElement %in% "5510" & flagObservationStatus %in% c("A", "", "T", "X")],
           by = c("geographicAreaM49", "timePointYears")]
 # check is na for year in which coco is not present:
 # if check is a value then num becomes the coco prod + coco import + coco export
