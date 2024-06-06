@@ -105,7 +105,7 @@ for (iter in seq(sessionItems)) {
             next
         }
         
-        if (nrow(extractedData[measuredElement %in% formulaTable$productivity & flagObservationStatus %in% "" 
+        if (nrow(extractedData[measuredElement %in% formulaTable$productivity & flagObservationStatus %in% c("A", "") 
                           & flagMethod %in% "q",]) > 0) {
             message("Item : ", currentItem, " has a protected productivity value")
             next
