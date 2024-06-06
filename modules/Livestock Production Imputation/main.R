@@ -519,7 +519,7 @@ if (CheckDebug()) {
 
 # NOTE: this used to come from the faoswsFlag package.
 # XXX: There are some discrepancies in the two tables (pkg and SWS)
-flagValidTable <- ReadDatatable("valid_flags")
+flagValidTable <- ReadDatatable("valid_flags_ocs2023")
 stopifnot(nrow(flagValidTable) > 0)
 
 imputationResult <- data.table()
