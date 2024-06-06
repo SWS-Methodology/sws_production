@@ -369,7 +369,7 @@ if (CheckDebug()) {
     
     library(faoswsModules)
     
-    SETTINGS <- ReadSettings("C:/Users/lombardi/OneDrive - Food and Agriculture Organization/Livia/faoswsProduction/modules/Livestock Production Imputation/sws.yml")
+    SETTINGS <- ReadSettings("sws.yml")
     
     ## If you're not on the system, your settings will overwrite any others
     R_SWS_SHARE_PATH <- SETTINGS[["share"]]
