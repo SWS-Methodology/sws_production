@@ -73,15 +73,18 @@ computeYield = function(data,
     
    
     
-    ## Assign observation flag.
-    ##
-    ## NOTE (Michael): If the denominator (area harvested is non-zero) then
-    ##                 perform flag aggregation, if the denominator is zero,
-    ##                 then assign the missing flag as the computed yield is NA.
-    dataCopy[feasibleFilter & nonZeroAreaHarvestedFilter,
-             `:=`(c(formulaParameters$yieldObservationFlag),
-                  aggregateObservationFlag(get(formulaParameters$productionObservationFlag),
-                                           get(formulaParameters$areaHarvestedObservationFlag)))]
+    ## Calculate the yield and assign observation and method flag
+    dataCopy[feasibleFilter, c(formulaParameters$yieldValue, 
+                               formulaParameters$yieldObservationFlag, 
+                               formulaParameters$yieldMethodFlag) := 
+               deriveRatio(get(formulaParameters$productionValue),
+                           get(formulaParameters$productionObservationFlag),
+                           get(formulaParameters$areaHarvestedValue),
+                           get(formulaParameters$areaHarvestedObservationFlag))]
+    
+    ## Convert yield unit
+    dataCopy[feasibleFilter, c(formulaParameters$yieldValue) := 
+               get(formulaParameters$yieldValue) * formulaParameters$unitConversion]
     
     ##Assign Observation flag M to that ratio with areaHarvested=0
     dataCopy[feasibleFilter & !nonZeroAreaHarvestedFilter,
