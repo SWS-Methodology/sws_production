@@ -441,7 +441,7 @@ selectedItemCode <-
            "session" = sessionItems,
            "all" = nonLivestockImputationItems)
 
-flagValidTable <- ReadDatatable("valid_flags")
+flagValidTable <- ReadDatatable("valid_flags_ocs2023")
 stopifnot(nrow(flagValidTable) > 0)
 
 #' ---
