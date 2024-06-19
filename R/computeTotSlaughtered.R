@@ -17,7 +17,7 @@ computeTotSlaughtered = function(data, FormulaParameters=animalFormulaParameters
     ## 1) Check if the columns are all there
     ## 2) This function works only if data are dernormalized
     
-    flagValidTable1=copy(flagValidTable)
+    flagValidTable1=ReadDatatable("valid_flags_ocs2023")
     flagValidTable1[flagObservationStatus=="I" & flagMethod=="c", Protected:=FALSE]
     flagValidTable1[flagObservationStatus=="E" & flagMethod=="c", Protected:=FALSE]
     flagValidTable1[flagObservationStatus=="E" & flagMethod=="h", Protected:=FALSE]
@@ -41,7 +41,7 @@ computeTotSlaughtered = function(data, FormulaParameters=animalFormulaParameters
     data[!is.na(takeOffRate)& 
              !is.na(get(animalFormulaParameters$areaHarvestedObservationFlag)) &
              !is.na(get(animalFormulaParameters$productionObservationFlag)),
-         TakeOffFlagObservationStatus:=aggregateObservationFlag(get(animalFormulaParameters$areaHarvestedObservationFlag),
+         TakeOffFlagObservationStatus:=deriveObservationFlag(get(animalFormulaParameters$areaHarvestedObservationFlag),
                                                                 get(animalFormulaParameters$productionObservationFlag))]
     
     data[,TakeOffRateFlagMethod:="u"]

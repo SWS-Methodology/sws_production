@@ -629,7 +629,8 @@ for (iter in seq(selectedMeatCode)) {
         ## This condition allow to use also the NON-protected data to build the imputations
         ## for last three years in case you have chosed to produce imputations only for last
         ## three years
-        animalData <- removeNonProtectedFlag(animalData, keepDataUntil = (lastYear - (lastYear - imputationStartYear)))
+        animalData <- removeNonProtectedFlag(animalData, keepDataUntil = (lastYear - (lastYear - imputationStartYear)),
+                                             flagValidTable = ReadDatatable("valid_flags_ocs2023"))
         
         # if (imputationTimeWindow == "all") {
         #   animalData <- removeNonProtectedFlag(animalData)
@@ -728,7 +729,8 @@ for (iter in seq(selectedMeatCode)) {
             preProcessing(data = .)
         
         slaughteredAnimalData <- removeNonProtectedFlag(slaughteredAnimalData, 
-                                                        keepDataUntil = (lastYear - (lastYear - imputationStartYear)))
+                                                        keepDataUntil = (lastYear - (lastYear - imputationStartYear)),
+                                                        flagValidTable = ReadDatatable("valid_flags_ocs2023"))
         
         # if (imputationTimeWindow == "all") {
         #   slaughteredAnimalData <- removeNonProtectedFlag(slaughteredAnimalData)
@@ -739,7 +741,7 @@ for (iter in seq(selectedMeatCode)) {
         # }
         
         slaughteredAnimalData <-
-            removeNonProtectedFlag(slaughteredAnimalData) %>%
+            removeNonProtectedFlag(slaughteredAnimalData, flagValidTable = ReadDatatable("valid_flags_ocs2023")) %>%
             expandYear(
                 data = .,
                 areaVar    = processingParameters$areaVar,
@@ -903,9 +905,10 @@ for (iter in seq(selectedMeatCode)) {
         ## Get the meat data
         meatData <- GetData(key = meatKey)
         meatData <- preProcessing(data = meatData)
-        meatData <- removeInvalidFlag(meatData)
+        meatData <- removeInvalidFlag(meatData, flagValidTable = ReadDatatable("valid_flags_ocs2023"))
         
-        meatData <- removeNonProtectedFlag(meatData, keepDataUntil = (lastYear - (lastYear - imputationStartYear)))
+        meatData <- removeNonProtectedFlag(meatData, keepDataUntil = (lastYear - (lastYear - imputationStartYear)),
+                                           flagValidTable = ReadDatatable("valid_flags_ocs2023"))
         
         # if (imputationTimeWindow == "all") {
         #   meatData <- removeNonProtectedFlag(meatData)
@@ -1040,7 +1043,7 @@ for (iter in seq(selectedMeatCode)) {
             )
         
         ##Obtain a vector containing all the protected flag combinations
-        ProtectedFlag <- getProtectedFlag()
+        ProtectedFlag <- getProtectedFlag(flag_table = "valid_flags_ocs2023")
         
         ##I have to exclude (M,-) from the protected flag combinations. Doing the checks for the carcass weight to
         ##free, otherwise I risk to open closed series:
@@ -1263,7 +1266,7 @@ for (iter in seq(selectedMeatCode)) {
                       imputationParameters$areaHarvestedParams$imputationMethodColumn),
                     list(
                         newS,
-                        aggregateObservationFlag(
+                        deriveObservationFlag(
                             get(imputationParameters$yieldParams$imputationFlagColumn),
                             get(imputationParameters$productionParams$imputationFlagColumn)
                         ),
@@ -1287,7 +1290,7 @@ for (iter in seq(selectedMeatCode)) {
                       imputationParameters$productionParams$imputationMethodColumn),
                     list(
                         newP,
-                        aggregateObservationFlag(
+                        deriveObservationFlag(
                             get(imputationParameters$yieldParams$imputationFlagColumn),
                             get(imputationParameters$productionParams$imputationFlagColumn)
                         ),
@@ -1418,7 +1421,8 @@ for (iter in seq(selectedMeatCode)) {
                         flagMethod == "i" |
                         flagMethod == "c",
                     ],
-                getInvalidData = TRUE
+                getInvalidData = TRUE,
+                flagTable = ReadDatatable("valid_flags_ocs2023")
             )
         
         ProtectedOverwritten <- ProtectedOverwritten[measuredElement != imputationParameters$areaHarvestedParams$variable]
@@ -1632,7 +1636,8 @@ for (iter in seq(selectedMeatCode)) {
                 modifiedFlagTable[flagObservationStatus == "I" & flagMethod == "-" , Protected := TRUE]
                 
                 nonMeatData <- removeNonProtectedFlag(nonMeatData, flagValidTable = modifiedFlagTable,
-                                                      keepDataUntil = (lastYear - (lastYear - imputationStartYear)))
+                                                      keepDataUntil = (lastYear - (lastYear - imputationStartYear)),
+                                                      flagValidTable = ReadDatatable("valid_flags_ocs2023"))
                 
                 # if (imputationTimeWindow == "all") {
                 #   nonMeatData = removeNonProtectedFlag(nonMeatData, flagValidTable = modifiedFlagTable)
