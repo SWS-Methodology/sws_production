@@ -65,9 +65,9 @@ for (iter in seq(sessionItems)) {
         
         set.seed(070416)
         
-         currentItem <- sessionItems[iter]
+        currentItem <- sessionItems[iter]
         
-
+        
         # suppressMessages({
         #     formulaTable <-
         #     getProductionFormula(itemCode = currentItem) %>%
@@ -106,7 +106,7 @@ for (iter in seq(sessionItems)) {
         }
         
         if (nrow(extractedData[measuredElement %in% formulaTable$productivity & flagObservationStatus %in% "" 
-                          & flagMethod %in% "q",]) > 0) {
+                               & flagMethod %in% "q",]) > 0) {
             message("Item : ", currentItem, " has a protected productivity value")
             next
         }
@@ -137,20 +137,20 @@ for (iter in seq(sessionItems)) {
             ":="(
                 c(formulaParameters$yieldMethodFlag),
                 list(processingParameters$missingValueMethodFlag))
-            ]
-
+        ]
+        
         if (typeof(processedData[, formulaParameters$yieldValue]) == "character"){
-
+            
             processedData[, formulaParameters$yieldValue := NULL]
-
+            
             processedData[, formulaParameters$yieldValue:= NA_real_]
-
+            
         }
         
         computed_Data = computeYield(processedData,
-                                 processingParameters = processingParameters,
-                                 formulaParameters = formulaParameters)
-
+                                     processingParameters = processingParameters,
+                                     formulaParameters = formulaParameters)
+        
         computed_Data <-
             normalise(
                 computed_Data,

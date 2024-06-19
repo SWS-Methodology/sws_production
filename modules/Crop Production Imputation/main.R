@@ -65,18 +65,18 @@ suppressMessages({
 R_SWS_SHARE_PATH <- Sys.getenv("R_SWS_SHARE_PATH")
 
 if (CheckDebug()) {
-    
+
     library(faoswsModules)
     SETTINGS <- ReadSettings("modules/production_imputation_not_livestock/sws.yml")
-    
+
     ## If you're not on the system, your settings will overwrite any others
     R_SWS_SHARE_PATH <- SETTINGS[["share"]]
-    
+
     ## Define where your certificates are stored
     SetClientFiles(SETTINGS[["certdir"]])
-    
+
     ## Get session information from SWS. Token must be obtained from web interface
-    
+
     GetTestEnvironment(baseUrl = SETTINGS[["server"]],
                        token = SETTINGS[["token"]])
 }
@@ -84,30 +84,30 @@ if (CheckDebug()) {
 ##' FUNCTIONS -------------------------------------------------------------------------------------------------------
 send_mail <- function(from = NA, to = NA, subject = NA,
                       body = NA, remove = FALSE) {
-    
+
     if (missing(from)) from <- 'no-reply@fao.org'
-    
+
     if (missing(to)) {
         if (exists('swsContext.userEmail')) {
             to <- swsContext.userEmail
         }
     }
-    
+
     if (is.null(to)) {
         stop('No valid email in `to` parameter.')
     }
-    
+
     if (missing(subject)) stop('Missing `subject`.')
-    
+
     if (missing(body)) stop('Missing `body`.')
-    
+
     if (length(body) > 1) {
         body <-
             sapply(
                 body,
                 function(x) {
                     if (file.exists(x)) {
-                        # https://en.wikipedia.org/wiki/Media_type 
+                        # https://en.wikipedia.org/wiki/Media_type
                         file_type <-
                             switch(
                                 tolower(sub('.*\\.([^.]+)$', '\\1', basename(x))),
@@ -126,17 +126,17 @@ send_mail <- function(from = NA, to = NA, subject = NA,
                                 # https://stackoverflow.com/questions/24725593/mime-type-for-serialized-r-objects
                                 rds  = 'application/octet-stream'
                             )
-                        
+
                         if (is.null(file_type)) {
                             stop(paste(tolower(sub('.*\\.([^.]+)$', '\\1', basename(x))),
                                        'is not a supported file type.'))
                         } else {
                             res <- sendmailR:::.file_attachment(x, basename(x), type = file_type)
-                            
+
                             if (remove == TRUE)    {
                                 unlink(x)
                             }
-                            
+
                             return(res)
                         }
                     } else {
@@ -147,7 +147,7 @@ send_mail <- function(from = NA, to = NA, subject = NA,
     } else if (!is.character(body)) {
         stop('`body` should be either a string or a list.')
     }
-    
+
     sendmailR::sendmail(from, to, subject, as.list(body))
 }
 
@@ -158,18 +158,18 @@ imputeProductionTripletOriginal = function(data,
                                            formulaParameters,
                                            imputationParameters){
     originDataType = sapply(data, FUN = typeof)
-    
+
     areaHarvestedImputationParameters = imputationParameters$areaHarvestedParams
     yieldImputationParameters = imputationParameters$yieldParams
     productionImputationParameters = imputationParameters$productionParams
-    
+
     message("Initializing ... ")
     dataCopy = copy(data)
-    
+
     ##filter out (m-) from the imputation process
-    
-    
-    
+
+
+
     ## Data Quality Checks
     suppressMessages({
         ensureImputationInputs(data = dataCopy,
@@ -177,18 +177,18 @@ imputeProductionTripletOriginal = function(data,
         ensureImputationInputs(data = dataCopy,
                                imputationParameters =
                                    productionImputationParameters)
-        
+
         ensureProductionInputs(dataCopy,
                                processingParameters = processingParameters,
                                formulaParameters = formulaParameters,
                                returnData = FALSE,
                                normalised = FALSE)
     })
-    
+
     setkeyv(x = dataCopy, cols = c(processingParameters$areaVar,
                                    processingParameters$yearValue))
-    
-    
+
+
     dataCopy = computeYield(dataCopy,
                             processingParameters = processingParameters,
                             formulaParameters = formulaParameters)
@@ -196,8 +196,8 @@ imputeProductionTripletOriginal = function(data,
     allYieldMissing = all(is.na(dataCopy[[formulaParameters$yieldValue]]))
     allProductionMissing = all(is.na(dataCopy[[formulaParameters$productionValue]]))
     allAreaMissing = all(is.na(dataCopy[[formulaParameters$areaHarvestedValue]]))
-    
-    
+
+
     if(!all(allYieldMissing)){
         ## Step two: Impute Yield
         message("Imputing Yield ...")
@@ -207,7 +207,7 @@ imputeProductionTripletOriginal = function(data,
         ##     as.formula(gsub(yearValue, "yearValue",
         ##                     gsub(yieldValue, "yieldValue",
         ##                          deparse(yieldFormula))))
-        
+
         dataCopy =imputeVariable(data = dataCopy,
                                  imputationParameters = yieldImputationParameters)
         ## TODO (Michael): Remove imputed zero yield as yield can not be zero by
@@ -225,26 +225,26 @@ imputeProductionTripletOriginal = function(data,
             dataCopy[[formulaParameters$yieldValue]])))
         message("Number of values imputed: ", n.missYield - n.missYield2)
         message("Number of values still missing: ", n.missYield2)
-        
+
         ## Balance production now using imputed yield
         dataCopy =
             balanceProduction(data = dataCopy,
                               processingParameters = processingParameters,
                               formulaParameters = formulaParameters)
-        
+
         ## NOTE (Michael): Check again whether production is available
         ##                 now after it is balanced.
         allProductionMissing = all(is.na(dataCopy[[formulaParameters$productionValue]]))
     } else {
         warning("The input dataset contains insufficient data to impute yield!")
     }
-    
+
     if(!all(allProductionMissing)){
         ## step three: Impute production
         message("Imputing Production ...")
         n.missProduction = length(which(is.na(
             dataCopy[[formulaParameters$productionValue]])))
-        
+
         dataCopy = imputeVariable(data = dataCopy,
                                   imputationParameters = productionImputationParameters)
         n.missProduction2 = length(which(is.na(
@@ -255,19 +255,19 @@ imputeProductionTripletOriginal = function(data,
     } else {
         warning("The input dataset contains insufficient data to impute production!")
     }
-    
+
     ## step four: balance area harvested
     message("Imputing Area Harvested ...")
     n.missAreaHarvested =
         length(which(is.na(
             dataCopy[[formulaParameters$areaHarvestedValue]])))
-    
+
     dataCopy =
         balanceAreaHarvested(data = dataCopy,
                              processingParameters = processingParameters,
                              formulaParameters = formulaParameters)
     allAreaMissing = all(is.na(dataCopy[[formulaParameters$areaHarvestedValue]]))
-    
+
     if(!all(allAreaMissing)){
         ## HACK (Michael): This is to ensure the area harvested are also
         ##                 imputed. Then we delete all computed yield and
@@ -280,13 +280,13 @@ imputeProductionTripletOriginal = function(data,
         ##                 way.
         ##
         ##                 Issue #88
-        
+
         dataCopy = imputeVariable(data = dataCopy,
                                   imputationParameters = areaHarvestedImputationParameters)
-        
+
         ## It was this part that caused the double "i" in methodFlag in the same triplet:
         ## beacuse I was deliting those non-protected yields even if I had used them to compute
-        ## as identity the other variables.   
+        ## as identity the other variables.
         ##   dataCopy[!is.na(get(formulaParameters$areaHarvestedValue)) &
         ##            !is.na(get(formulaParameters$productionValue)) &
         ##            !(combineFlag(.SD,
@@ -303,8 +303,8 @@ imputeProductionTripletOriginal = function(data,
                          formulaParameters = formulaParameters)
         dataCopy = imputeVariable(data = dataCopy,
                                   imputationParameters = yieldImputationParameters)
-        
-        
+
+
     } ## End of HACK.
     n.missAreaHarvested2 =
         length(which(is.na(
@@ -312,8 +312,8 @@ imputeProductionTripletOriginal = function(data,
     message("Number of values imputed: ",
             n.missAreaHarvested - n.missAreaHarvested2)
     message("Number of values still missing: ", n.missAreaHarvested2)
-    
-    
+
+
     ## This is to ensure the data type of the output is identical to
     ## the input data.
     dataCopy[, `:=`(colnames(dataCopy),
@@ -348,10 +348,16 @@ imputationSelection <- swsContext.computationParams$imputation_selection
 
 #Time window substituted with Origin Year
 #imputationTimeWindow <- swsContext.computationParams$imputation_timeWindow
-imputationStartYear <- as.numeric(swsContext.computationParams$start_year)
-#imputationStartYear <- 2000
+
+# DEBUG
+
+#imputationStartYear <- as.numeric(swsContext.computationParams$start_year)
+imputationStartYear <- 2000
 ##' Check the validity of the computational parameter
 stopifnot(imputationStartYear >= 1991)
+
+#DEBUG
+imputationSelection = "session"
 
 if(!imputationSelection %in% c("session", "all"))
     stop("Incorrect imputation selection specified")
@@ -371,6 +377,9 @@ processingParameters <-
     productionProcessingParameters(datasetConfig = datasetConfig)
 
 lastYear=as.numeric(swsContext.computationParams$last_year)
+
+#DEBUG
+lastYear=2021
 
 
 ## Inserting the list of EU countries declared in the MoU. If the user decide to exclude them from the imputation
@@ -406,6 +415,8 @@ completeImputationKey@dimensions$timePointYears@keys <-
 ##'                   imputed_slaughtered and synchronise slaughtered module, so
 ##'                   they should be excluded here.**
 ##'
+##'
+##' NOTE (Sebastian): The share path isn't actually used here - it's
 liveStockItems <-
     getAnimalMeatMapping(R_SWS_SHARE_PATH = R_SWS_SHARE_PATH,
                          onlyMeatChildren = FALSE)
@@ -437,7 +448,7 @@ stopifnot(nrow(flagValidTable) > 0)
 ##' ## Perform Imputation
 imputationResult <- data.table()
 
-# lastYear=max(as.numeric(completeImputationKey@dimensions$timePointYears@keys))
+#lastYear=max(as.numeric(completeImputationKey@dimensions$timePointYears@keys))
 
 # logConsole1=file("log.txt",open = "w")
 # sink(file = logConsole1, append = TRUE, type = c( "message"))
@@ -445,13 +456,13 @@ imputationResult <- data.table()
 ##' Loop through the commodities to impute the items individually.
 
 for (iter in seq(selectedItemCode)) {
-    
+
     imputationProcess <- try({
         set.seed(070416)
-        
+
         currentItem <- selectedItemCode[iter]
-        
-        
+
+
         ## Obtain the formula and remove indigenous and biological meat.
         ##
         ## NOTE (Michael): Biological and indigenous meat are currently
@@ -462,7 +473,7 @@ for (iter in seq(selectedItemCode)) {
         formulaTable <-
             getProductionFormula(itemCode = currentItem) %>%
             removeIndigenousBiologicalMeat(formula = .)
-        
+
         ## NOTE (Michael): Imputation should be performed on only 1 formula,
         ##                 if there are multiple formulas, they should be
         ##                 calculated based on the values imputed. For
@@ -474,7 +485,7 @@ for (iter in seq(selectedItemCode)) {
         if (nrow(formulaTable) > 1) {
             stop("Imputation should only use one formula")
         }
-        
+
         ## Create the formula parameter list
         formulaParameters <-
             with(formulaTable,
@@ -484,20 +495,20 @@ for (iter in seq(selectedItemCode)) {
                                              yieldCode = productivity,
                                              unitConversion = unitConversion)
             )
-        
+
         ## Update the item/element key according to the current commodity
         subKey <- completeImputationKey
-        
+
         subKey@dimensions$measuredItemCPC@keys <- currentItem
-        
+
         subKey@dimensions$measuredElement@keys <-
             with(formulaParameters,
                  c(productionCode, areaHarvestedCode, yieldCode))
-        
+
         ## Start the imputation
         message("Imputation for item: ", currentItem, " (",  iter, " out of ",
                 length(selectedItemCode),")")
-        
+
         ## Build imputation parameter
         imputationParameters <-
             with(formulaParameters,
@@ -505,23 +516,23 @@ for (iter in seq(selectedItemCode)) {
                                          areaHarvestedCode = areaHarvestedCode,
                                          yieldCode = yieldCode)
             )
-        
+
         ## Extract the data, and skip the imputation if the data contains no entry.
         extractedData <- GetData(subKey)
-        
+
         ##extractedData= expandDatasetYears(extractedData, processingParameters,
         ##                                 swsContext.computationParams$startYear,swsContext.computationParams$endYear )
-        
+
         if (nrow(extractedData) == 0) {
             message("Item : ", currentItem, " does not contain any data")
             next
         }
-        
+
         ## Process the data.
         processedData <-
             extractedData %>%
             preProcessing(data = .)
-        
+
         processedData <- processedData[timePointYears >= 1991,]
         ## expandYear(data = .,
         ##            areaVar = processingParameters$areaVar,
@@ -529,10 +540,10 @@ for (iter in seq(selectedItemCode)) {
         ##            itemVar = processingParameters$itemVar,
         ##            valueVar = processingParameters$valueVar,
         ##            newYears= lastYear) %>%
-        
+
         ##' RemoveNon protected flag applied in the range of the starting Year
         processedData <- removeNonProtectedFlag(processedData, keepDataUntil = (lastYear - (lastYear - imputationStartYear)))
-        # 
+        #
         # if (imputationTimeWindow == "all") {
         #     processedData <- removeNonProtectedFlag(processedData)
         # } else if (imputationTimeWindow == "lastThree") {
@@ -540,20 +551,20 @@ for (iter in seq(selectedItemCode)) {
         # } else if (imputationTimeWindow == "lastFive") {
         #     processedData <- removeNonProtectedFlag(processedData, keepDataUntil = (lastYear - 4))
         # }
-        
+
         processedData <-
             denormalise(
                 normalisedData = processedData,
                 denormaliseKey = "measuredElement",
                 fillEmptyRecords = TRUE
             )
-        
+
         processedData <-
             createTriplet(
                 data = processedData,
                 formula = formulaTable
             )
-        
+
         ##    if(imputationTimeWindow=="lastThree"){
         ##        processedDataLast=processedData[get(processingParameters$yearVar) %in% c(lastYear, lastYear-1, lastYear-2)]
         ##        processedDataAll=processedData[!get(processingParameters$yearVar) %in% c(lastYear, lastYear-1, lastYear-2)]
@@ -580,31 +591,31 @@ for (iter in seq(selectedItemCode)) {
         ##
         ##imputationParameters$productionParams$plotImputation="prompt"
         ##------------------------------------------------------------------------------------------------------------------------
-        
+
         ## We have to remove (M,-) from yield: since yield is usually computed ad identity,
         ## it results inusual that it exists a last available protected value different from NA and when we perform
         ## the function expandYear we risk to block the whole time series. I replace all the (M,-) in yield with
         ## (M,u) the triplet will be sychronized by the imputeProductionTriplet function.
-        
+
         processedData[
             get(formulaParameters$yieldObservationFlag) == processingParameters$missingValueObservationFlag,
             ":="(
                 c(formulaParameters$yieldMethodFlag),
                 list(processingParameters$missingValueMethodFlag))
             ]
-        
+
         processedData <- normalise(processedData)
         ##' We want to avoid imputations for items which have official data starting from certain year.
         ##' M u at this point corresponds to not protected values to be reimputed
         ##' assigning specific flag to those data to get the difference between the empty series expanded with
         ##' expandYear function
-        
-        toBeImputed <- processedData[get(processingParameters$flagObservationVar) == processingParameters$missingValueObservationFlag & 
+
+        toBeImputed <- processedData[get(processingParameters$flagObservationVar) == processingParameters$missingValueObservationFlag &
                           get(processingParameters$flagMethodVar) == processingParameters$missingValueMethodFlag,]
 
-        
+
         officialData <- setdiff(processedData,toBeImputed)
-        
+
         officialData_expanded <-
             expandYear(
                 data       = officialData,
@@ -614,7 +625,7 @@ for (iter in seq(selectedItemCode)) {
                 valueVar   = processingParameters$valueVar,
                 newYears   = lastYear
             )
-        
+
         toBeImputed_expanded <-
             expandYear(
                 data       = toBeImputed,
@@ -624,41 +635,41 @@ for (iter in seq(selectedItemCode)) {
                 valueVar   = processingParameters$valueVar,
                 newYears   = lastYear
             )
-    
+
         ##------------------------------------------------------------------------------------------------------------##
-        
+
         ##' if the country start an official production we don t want to impute the production before that date
         pre_official <- copy(officialData_expanded)
-        
-        
+
+
         pre_official <- pre_official[(flagObservationStatus == "") | (flagObservationStatus == "E" & flagMethod == "f")|
                                          (flagObservationStatus == "T"),
                                      .SD[which.min(timePointYears)], by = c("measuredElement", "geographicAreaM49")]
-        
+
         ##' to do : check the merge criteria with a hole imputed time serie ... with Ie present of course!
         ##' if no official appear, null col firstOfficial should be managed
         pre_official_merge <- merge(officialData_expanded, pre_official, all.x = T,
                                     by = c("measuredItemCPC","measuredElement", "geographicAreaM49"))
-        
+
         setnames(pre_official_merge, c("timePointYears.x","Value.x","flagObservationStatus.x","flagMethod.x","timePointYears.y"),
                  c("timePointYears","Value","flagObservationStatus","flagMethod","firstOfficial"))
-        
+
         pre_official_merge<- pre_official_merge[, c("geographicAreaM49","measuredElement","measuredItemCPC",
                                                     "timePointYears","Value","flagObservationStatus","flagMethod",
-                                                    "firstOfficial"), with = FALSE] 
-        
+                                                    "firstOfficial"), with = FALSE]
+
         ##' let s take off rows with firstOfficial NA, it means the whole time serie doesn t have an official flag
-        ##' for this reason it should be attached later to be imputed 
-        
+        ##' for this reason it should be attached later to be imputed
+
         pre_official_merge_na <- pre_official_merge[is.na(firstOfficial),]
-        
+
         pre_official_merge <- pre_official_merge[!is.na(firstOfficial) & timePointYears >= firstOfficial,]
-        
+
         pre_official_merge <- rbind(pre_official_merge,pre_official_merge_na)
-        
+
         pre_official_merge[,firstOfficial := NULL]
-        
-        
+
+
         ##' binding with the not protected values that we want to impute
         selectedData <- rbind(toBeImputed_expanded[! pre_official_merge, on = c("measuredElement","geographicAreaM49",
         "timePointYears", "measuredItemCPC")], pre_official_merge)
@@ -672,9 +683,9 @@ for (iter in seq(selectedItemCode)) {
                 valueVar   = processingParameters$valueVar,
                 newYears   = lastYear
             )
-        
-        processedData <- denormalise(processedData, denormaliseKey = "measuredElement") 
-        
+
+        processedData <- denormalise(processedData, denormaliseKey = "measuredElement")
+
         ##------------------------------------------------------------------------------------------------------------------------
         ## Perform imputation
         imputed <-
@@ -684,8 +695,8 @@ for (iter in seq(selectedItemCode)) {
                 formulaParameters     = formulaParameters,
                 imputationParameters  = imputationParameters
             )
-        
-        
+
+
         ##------------------------------------------------------------------------------------------------------------------------
         ## By now we did not have touched those situation in which production or areaHarvested are ZERO:
         ## we may have some yield different from zero even if productio or areaHarvested or the both are ZERO.
@@ -696,15 +707,15 @@ for (iter in seq(selectedItemCode)) {
         ##    3) and non zero yield only.
         ##
         zeroProd <- imputed[, get(formulaParameters$productionValue) == 0 ]
-        
+
         zeroreHArv <- imputed[, get(formulaParameters$areaHarvestedValue) == 0]
-        
+
         nonZeroYield <- imputed[, (get(formulaParameters$yieldValue) != 0)]
-        
+
         myfilter <- (zeroProd|zeroreHArv) & nonZeroYield
-        
+
         imputed[myfilter, ":="(c(formulaParameters$yieldValue), list(0))]
-        
+
         imputed[
             myfilter,
             ":="(
@@ -715,17 +726,17 @@ for (iter in seq(selectedItemCode)) {
                 )
             )
             ]
-        
+
         imputed[myfilter, ":="(c(formulaParameters$yieldMethodFlag),list(processingParameters$balanceMethodFlag))]
-        
+
         ##------------------------------------------------------------------------------------------------------------------------
-        
+
         ## Filter timePointYears for which it has been requested to compute imputations
         ## timeWindow= c(as.numeric(swsContext.computationParams$startYear):as.numeric(swsContext.computationParams$endYear))
         ## imputed= imputed[timePointYears %in% timeWindow,]
-        
+
         ## Save the imputation back to the database.
-        
+
         ##  Records containing invalid dates are
         ##  excluded, for example, South Sudan only came
         ##  into existence in 2011. Thus although we can
@@ -740,112 +751,112 @@ for (iter in seq(selectedItemCode)) {
                 normalised = FALSE
             ) %>%
             normalise(.)
-        
+
         #ensureProductionBalanced(imputed)
         #ensureProtectedData(imputed)
-        
-        ##' Here we select which data shoul be kept for the saving given that we don't want to impute values before 
+
+        ##' Here we select which data shoul be kept for the saving given that we don't want to impute values before
         ##' official/semi-official data appears
-        
-        final_imputed <- semi_join(imputed, selectedData, 
+
+        final_imputed <- semi_join(imputed, selectedData,
                                     by = c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears"))
 
         ##' remove all the productivity elements where input or output is not present
         final_imputed <- as.data.table(final_imputed)
-        
+
         prova <- denormalise(final_imputed, denormaliseKey = "measuredElement")
-        
-        naOutput <- prova[, is.na(get(formulaParameters$productionValue)) & 
+
+        naOutput <- prova[, is.na(get(formulaParameters$productionValue)) &
                             is.na(get(formulaParameters$productionMethodFlag))]
-        
-        naInput <- prova[, is.na(get(formulaParameters$areaHarvestedValue)) & 
+
+        naInput <- prova[, is.na(get(formulaParameters$areaHarvestedValue)) &
                            is.na(get(formulaParameters$areaHarvestedMethodFlag))]
 
-        nafilter <- (naOutput|naInput) 
-        
+        nafilter <- (naOutput|naInput)
+
         prova <- prova[!nafilter,]
-        
+
         final_imputed <- normalise(prova, removeNonExistingRecords = TRUE)
-        
+
         anomalies <- final_imputed[flagMethod == "",]
-        
+
         ## Only data with method flag "i" for balanced,
         ## or flag combination (I, e) for imputed are
         ## saved back to the database.
         ##Also the new (M,-) data have to be sent back, series must be blocked!!!
-        
+
         final_imputed <-
             final_imputed[
                 (flagMethod == "i" | (flagObservationStatus == "I" & flagMethod == "e")) |
                     (flagObservationStatus == "M" & flagMethod == "-") |
                     (flagObservationStatus == "E" & flagMethod == "e"),]
-        
+
         ##I should send to the data.base also the (M,-) value added in the last year in order to highlight that the series is closed.
-        
+
         # if (imputationTimeWindow == "lastThree") {
         #     imputed <- imputed[get(processingParameters$yearVar) %in% (lastYear - 0:2)]
         # } else if (imputationTimeWindow == "lastFive") {
         #     imputed <- imputed[get(processingParameters$yearVar) %in% (lastYear - 0:4)]
         # }
         final_imputed <- final_imputed[get(processingParameters$yearVar) %in% (lastYear - 0:(lastYear - imputationStartYear))]
-        
+
         final_imputed <- postProcessing(data = final_imputed)
-        
+
         if (eu_parameter == "no") {
-            
+
             final_imputed=final_imputed[geographicAreaM49 %!in% eu_list, ]
-            
+
             SaveData(domain = sessionKey@domain,
                      dataset = sessionKey@dataset,
                      data =  final_imputed)
-            
+
         }else{
-        
+
         SaveData(domain = sessionKey@domain,
                  dataset = sessionKey@dataset,
                  data =  final_imputed)
         }
-        
+
     })
-    
+
     ## Capture the items that failed
     if(inherits(imputationProcess, "try-error"))
         imputationResult <-
             rbind(imputationResult,
                   data.table(item = currentItem,
                              error = imputationProcess[iter]))
-    
+
 }
 message("Production Crops Imputation loop ended")
 ##' ---
 ##' ## Return Message
 
 if (exists("imputationResult") && nrow(imputationResult) > 0) {
-    
+
     write.csv(imputationResult, tmp_file_no_imputed)
-    
+
     # ## Initiate email
     # from <- "sws@fao.org"
     # to <- swsContext.userEmail
     # subject <- "Imputation Result"
     # body <- paste0("The following items failed, please inform the maintainer "
     #                , "of the module")
-    # 
+    #
     # errorAttachmentName <- "non_livestock_imputation_result.csv"
-    # 
+    #
     # errorAttachmentPath <-
     #     paste0(R_SWS_SHARE_PATH, "/kao/", errorAttachmentName)
-    # 
+    #
     # write.csv(imputationResult, file = errorAttachmentPath,
     #           row.names = FALSE)
-    # 
+    #
     # errorAttachmentObject <- mime_part(x = errorAttachmentPath,
     #                                    name = errorAttachmentName)
-    # 
+    #
     # bodyWithAttachment <- list(body, errorAttachmentObject)
-    # 
+    #
     # sendmail(from = from, to = to, subject = subject, msg = bodyWithAttachment)
-    # 
+    #
     # stop("Production imputation incomplete, check following email to see where ",
     #      " it failed")
 }
@@ -858,7 +869,7 @@ if (exists("imputationResult") && nrow(imputationResult) > 0) {
 #     to <- swsContext.userEmail
 #     subject <- "Crop-production imputation plugin has correctly run"
 #     body <- paste0("The plug-in has saved the Production imputation in your session. Session number: ",  sessionKey@sessionId)
-#     
+#
 #     sendmail(from = from, to = to, subject = subject, msg = body)
 # }
 
