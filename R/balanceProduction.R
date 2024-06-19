@@ -63,7 +63,7 @@ balanceProduction = function(data,
     ## Assign observation flag
     dataCopy[feasibleFilter & nonZeroYieldFilter,
              `:=`(c(formulaParameters$productionObservationFlag),
-                  aggregateObservationFlag(get(formulaParameters$areaHarvestedObservationFlag),
+                  deriveObservationFlag(get(formulaParameters$areaHarvestedObservationFlag),
                                            get(formulaParameters$yieldObservationFlag)))]
 
     ## Assign method flag

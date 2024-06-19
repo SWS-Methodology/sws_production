@@ -66,7 +66,7 @@ balanceAreaHarvested = function(data,
     ## NOTE (Michael): Although the yield should never be zero by definition.
     dataCopy[feasibleFilter & nonZeroYieldFilter,
              `:=`(c(formulaParameters$areaHarvestedObservationFlag),
-                  aggregateObservationFlag(get(formulaParameters$productionObservationFlag),
+                  deriveObservationFlag(get(formulaParameters$productionObservationFlag),
                                            get(formulaParameters$yieldObservationFlag)))]
     
     dataCopy[feasibleFilter & !nonZeroYieldFilter,
