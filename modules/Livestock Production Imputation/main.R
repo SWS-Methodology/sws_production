@@ -373,11 +373,7 @@ if (CheckDebug()) {
     
     ## If you're not on the system, your settings will overwrite any others
     R_SWS_SHARE_PATH <- SETTINGS[["share"]]
-    
-    ## Define where your certificates are stored
-    SetClientFiles(SETTINGS[["certdir"]])
-    #SetClientFiles("C:/Users/Lombardili/OneDrive - Food and Agriculture Organization/Livia/certificates/production")
-    
+
     ## Get session information from SWS. Token must be obtained from web interface
     GetTestEnvironment(SETTINGS[["server"]], SETTINGS[["token"]])
 }
