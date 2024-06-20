@@ -17,11 +17,9 @@ R_SWS_SHARE_PATH <- Sys.getenv("R_SWS_SHARE_PATH")
 if (CheckDebug()) {
   R_SWS_SHARE_PATH <- "//hqlprsws1.hq.un.fao.org/sws_r_share"
   
-  mydir <- "modules/SUA_bal_compilation_round2021"
+  mydir <- "modules/Derived Faostat check"
   
   SETTINGS <- faoswsModules::ReadSettings(file.path(mydir, "sws.yml"))
-  
-  SetClientFiles(SETTINGS[["certdir"]])
   
   GetTestEnvironment(baseUrl = SETTINGS[["server"]], token = SETTINGS[["token"]])
 }
