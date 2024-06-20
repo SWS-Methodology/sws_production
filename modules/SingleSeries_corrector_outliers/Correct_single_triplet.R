@@ -14,7 +14,7 @@ correctSingleTriplet <- function(data = data,
     # tranform to na data falgged as missing 
     data[flagObservationStatus=="M",Value:=NA_real_]
     #protect the productivity values coming from manual estimated input or output or the production in tonnes for eggs coming from 1000 value
-    data[flagObservationStatus %in% "T" & flagMethod %in% "i", Protected := TRUE]
+    data[flagObservationStatus %in% c("T", "X") & flagMethod %in% "i", Protected := TRUE]
     
     data[flagObservationStatus %in% "E" & flagMethod %in% "i", Protected := TRUE]
     
