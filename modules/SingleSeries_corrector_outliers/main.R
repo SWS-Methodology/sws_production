@@ -913,12 +913,12 @@ send_mail <- function(from = NA, to = NA, subject = NA,
 
 
 # Read the data needed
-flagValidTable <- ReadDatatable("valid_flags")
-flagValidTable[is.na(flagObservationStatus), flagObservationStatus := ""]
+flagValidTable <- ReadDatatable("valid_flags_ocs2023")
+flagValidTable[is.na(flagObservationStatus), flagObservationStatus := "A"]
 #let s unprotect imputations
 flagValidTable[flagObservationStatus == 'I' & flagMethod == 'c', Protected := FALSE]
 #let s protect official yields
-flagValidTable[flagObservationStatus == '' & flagMethod == 'i', Protected := TRUE]
+flagValidTable[(flagObservationStatus %in% c('', 'A')) & flagMethod == 'i', Protected := TRUE]
 
 
 
