@@ -277,7 +277,7 @@ out_data <- out_data[order(geographicAreaM49, measuredElementSuaFbs,
 
 out_data <- out_data[timePointYears %in% as.character(start_year:end_year),]
 
-out_data[,flag_Check:=ifelse(flagObservationStatus %in% c("","T"),TRUE,FALSE)]
+out_data[,flag_Check:=ifelse(flagObservationStatus %in% c("", "T", "A", "X"),TRUE,FALSE)]
 
 out_data[,`:=`(lower_th = NA_real_, upper_th = NA_real_)]
 
@@ -614,7 +614,7 @@ missing_last_year = missing_last_year[!is.nan(mean),]
 #### RIMUOVI -2 metti -1 IN LAST CHECK 2019 OFFICIAL
 ###########################################
 missing_last_year[, exists:= ifelse(timePointYears %in% as.character((tail(FOCUS_INTERVAL,1)-2): (tail(FOCUS_INTERVAL,1)-1)) 
-                                    & flagObservationStatus %in% c("","T"),TRUE,FALSE),
+                                    & flagObservationStatus %in% c("", "T", "A", "X"),TRUE,FALSE),
                   by = c("geographicAreaM49","measuredItemFbsSua","measuredElementSuaFbs")]
 
 missing_last_year[, exists:= ifelse(sum(exists) >=1 ,TRUE,FALSE),
@@ -623,7 +623,7 @@ missing_last_year[, exists:= ifelse(sum(exists) >=1 ,TRUE,FALSE),
 
 missing_last_year[,`:=`(miss_official = FALSE)]
 
-missing_last_year[timePointYears %in% as.character(tail(FOCUS_INTERVAL,1))  & flagObservationStatus %!in% c("","T") 
+missing_last_year[timePointYears %in% as.character(tail(FOCUS_INTERVAL,1))  & flagObservationStatus %!in% c("", "T", "A", "X") 
                   & exists == TRUE, miss_official := TRUE]
 
 missing_last_year <- missing_last_year[miss_official == TRUE | missing == TRUE,]
