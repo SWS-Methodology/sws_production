@@ -4,9 +4,14 @@
 \alias{transferParentToChild}
 \title{Function to transfer values from parent to child.}
 \usage{
-transferParentToChild(parentData, childData, mappingTable,
-  parentToChild = TRUE, transferMethodFlag = "c",
-  imputationObservationFlag = "I")
+transferParentToChild(
+  parentData,
+  childData,
+  mappingTable,
+  parentToChild = TRUE,
+  transferMethodFlag = "c",
+  imputationObservationFlag = "I"
+)
 }
 \arguments{
 \item{parentData}{The data for animal commodity.}
@@ -51,4 +56,3 @@ is retained.}
 
 }
 }
-

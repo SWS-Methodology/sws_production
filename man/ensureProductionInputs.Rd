@@ -4,8 +4,13 @@
 \alias{ensureProductionInputs}
 \title{Check Production Inputs}
 \usage{
-ensureProductionInputs(data, processingParameters, formulaParameters,
-  returnData = TRUE, normalised = TRUE)
+ensureProductionInputs(
+  data,
+  processingParameters,
+  formulaParameters,
+  returnData = TRUE,
+  normalised = TRUE
+)
 }
 \arguments{
 \item{data}{A data.table containing the data.}
@@ -27,4 +32,3 @@ The original data if all tests are passed
 \description{
 This function is designed to ensure that the provided dataset is valid.
 }
-

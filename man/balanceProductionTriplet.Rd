@@ -25,4 +25,3 @@ To perform this function, 0M values and previous values calculated which has
 method flag 'i' should be removed as the function only fill in values which
 has the value NA.
 }
-

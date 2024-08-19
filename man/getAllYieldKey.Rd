@@ -4,9 +4,13 @@
 \alias{getAllYieldKey}
 \title{Function to get the complete yield key}
 \usage{
-getAllYieldKey(areaVar = "geographicAreaM49", itemVar = "measuredItemCPC",
-  elementVar = "measuredElement", yearVar = "timePointYears",
-  identityElements = c("31", "41", "51"))
+getAllYieldKey(
+  areaVar = "geographicAreaM49",
+  itemVar = "measuredItemCPC",
+  elementVar = "measuredElement",
+  yearVar = "timePointYears",
+  identityElements = c("31", "41", "51")
+)
 }
 \arguments{
 \item{areaVar}{The column name corresponding to the geographic area.}
@@ -27,4 +31,3 @@ A DatasetKey comprise of all the codes which are relevant to the
 \description{
 Function to get the complete yield key
 }
-

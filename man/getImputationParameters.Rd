@@ -4,9 +4,15 @@
 \alias{getImputationParameters}
 \title{Get Imputation Parameters}
 \usage{
-getImputationParameters(productionCode, areaHarvestedCode, yieldCode,
-  areaVar = "geographicAreaM49", itemVar = "measuredItemCPC",
-  elementVar = "measuredElement", yearVar = "timePointYears")
+getImputationParameters(
+  productionCode,
+  areaHarvestedCode,
+  yieldCode,
+  areaVar = "geographicAreaM49",
+  itemVar = "measuredItemCPC",
+  elementVar = "measuredElement",
+  yearVar = "timePointYears"
+)
 }
 \arguments{
 \item{productionCode}{The element code of production}
@@ -31,4 +37,3 @@ This function contains the logic that we'll use to define the imputation
 models and their parameters.
 .
 }
-

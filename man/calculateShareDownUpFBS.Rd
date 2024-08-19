@@ -7,8 +7,14 @@ This function has been written to be used in the DerivedCommodies_submodule whic
 That's why this kind of shares are used to transform the derived into its direct parent.
 that it is allocated in different productive processes.}
 \usage{
-calculateShareDownUpFBS(data, tree, printNegativeAvailability = TRUE, params,
-  printDirectory = NULL, useAllSUAcomponents = FALSE)
+calculateShareDownUpFBS(
+  data,
+  tree,
+  printNegativeAvailability = TRUE,
+  params,
+  printDirectory = NULL,
+  useAllSUAcomponents = FALSE
+)
 }
 \arguments{
 \item{data}{input data.table: SUA table}
@@ -27,4 +33,3 @@ parameter allows to use all the components}
 \description{
 Duplication used in Used in faoswsStandardization
 }
-
