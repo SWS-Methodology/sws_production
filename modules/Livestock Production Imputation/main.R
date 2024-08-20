@@ -508,10 +508,10 @@ selectedMeatCode <-
 
 ##' Here we iterate through the the meat item to perform the steps described in
 ##' the description. Essentially, we are looping over different livestock trees.
-if (CheckDebug()) {
-    logConsole1 <- file("log.txt",open = "w")
-    sink(file = logConsole1, append = TRUE, type = "message")
-}
+# if (CheckDebug()) {
+#     logConsole1 <- file("log.txt",open = "w")
+#     sink(file = logConsole1, append = TRUE, type = "message")
+# }
 
 # NOTE: this used to come from the faoswsFlag package.
 # XXX: There are some discrepancies in the two tables (pkg and SWS)
