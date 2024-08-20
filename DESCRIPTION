@@ -21,4 +21,4 @@ LazyData: yes
 ZipData: no
 VignetteBuilder: knitr
 Suggests: knitr, ggplot2, faosws, xtable, testthat
-RoxygenNote: 5.0.1
+RoxygenNote: 7.3.1

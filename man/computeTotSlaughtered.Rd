@@ -17,4 +17,3 @@ This function has been created to compute the totStock that has to be used as
 reference to compue the take off rates and consequently the number of slaughtered  animals.
 In order to compute the total animal stocks, trade has to be taken into account
 }
-

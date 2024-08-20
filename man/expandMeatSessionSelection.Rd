@@ -5,9 +5,14 @@
 \title{This function expands the current selection in the session to
 include all necessary meat.}
 \usage{
-expandMeatSessionSelection(oldKey, selectedMeatTable,
-  areaVar = "geographicAreaM49", itemVar = "measuredItemCPC",
-  elementVar = "measuredElement", yearVar = "timePointYears")
+expandMeatSessionSelection(
+  oldKey,
+  selectedMeatTable,
+  areaVar = "geographicAreaM49",
+  itemVar = "measuredItemCPC",
+  elementVar = "measuredElement",
+  yearVar = "timePointYears"
+)
 }
 \arguments{
 \item{oldKey}{The current key used in the session}
@@ -31,4 +36,3 @@ A new DatasetKey object expanded to include the meat
 This function expands the current selection in the session to
 include all necessary meat.
 }
-

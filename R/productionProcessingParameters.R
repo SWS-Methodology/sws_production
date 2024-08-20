@@ -12,6 +12,9 @@
 ##'     should be removed.
 ##' @param removeManualEstimation logical, whether previous manual estimation
 ##'     should be removed.
+##'     
+##' @param convertOCS2023Flags Automatically convert observation status flags 
+##'     (blank) to A and T to X
 ##' @param imputationObservationFlag The observation flag that represents
 ##'     imputation.
 ##' @param imputationMethodFlag The observation flag that represents estimated
@@ -58,6 +61,7 @@ productionProcessingParameters = function(datasetConfig,
                                           removePriorImputation = FALSE,
                                           removeManualEstimation = FALSE,
                                           keepOnlyProtected = TRUE,
+                                          convertOCS2023Flags = TRUE,
                                           imputationObservationFlag = "I",
                                           imputationMethodFlag = "e",
                                           balanceMethodFlag = "i",
@@ -76,27 +80,28 @@ productionProcessingParameters = function(datasetConfig,
     valueVar = "Value"
 
     list(
-        domain = datasetConfig$domain,
-        dataset = dataset,
-        areaVar = areaVar,
-        yearVar = yearVar,
-        itemVar = itemVar,
-        elementVar = elementVar,
-        flagObservationVar = flagObservationVar,
-        flagMethodVar = flagMethodVar,
-        valueVar = valueVar,
-        keepOnlyProtected =keepOnlyProtected,
-        removePriorImputation = removePriorImputation,
-        removeManualEstimation = removeManualEstimation,
+        domain                    = datasetConfig$domain,
+        dataset                   = dataset,
+        areaVar                   = areaVar,
+        yearVar                   = yearVar,
+        itemVar                   = itemVar,
+        elementVar                = elementVar,
+        flagObservationVar        = flagObservationVar,
+        flagMethodVar             = flagMethodVar,
+        valueVar                  = valueVar,
+        keepOnlyProtected         = keepOnlyProtected,
+        convertOCS2023Flags       = convertOCS2023Flags,
+        removePriorImputation     = removePriorImputation,
+        removeManualEstimation    = removeManualEstimation,
         imputationObservationFlag = imputationObservationFlag,
-        imputationMethodFlag = imputationMethodFlag,
+        imputationMethodFlag      = imputationMethodFlag,
         ## NOTE (Michael): balanceMethod should not have an observation flag,
         ##                 it uses flag aggregation.
-        balanceMethodFlag = balanceMethodFlag,
+        balanceMethodFlag               = balanceMethodFlag,
         manualEstimationObservationFlag = manualEstimationObservationFlag,
-        manualEstimationMethodFlag = manualEstimationMethodFlag,
-        missingValueObservationFlag = missingValueObservationFlag,
-        missingValueMethodFlag = missingValueMethodFlag
+        manualEstimationMethodFlag      = manualEstimationMethodFlag,
+        missingValueObservationFlag     = missingValueObservationFlag,
+        missingValueMethodFlag          = missingValueMethodFlag
     )
 
 }

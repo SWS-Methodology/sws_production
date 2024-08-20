@@ -4,8 +4,13 @@
 \alias{imputeProductionTriplet}
 \title{This function imputes the whole production domain.}
 \usage{
-imputeProductionTriplet(data, processingParameters, formulaParameters,
-  imputationParameters)
+imputeProductionTriplet(
+  data,
+  processingParameters,
+  formulaParameters,
+  imputationParameters,
+  ...
+)
 }
 \arguments{
 \item{data}{The data}
@@ -28,4 +33,3 @@ time.
 Transformation in the yield formula is not allowed and will not be taken
 into account.
 }
-

@@ -21,4 +21,3 @@ A vector containing the commodity items that are selected but not
 The purpose of the function to capture and give warning when items are being
 selected in the session, but not included in the imputation list.
 }
-

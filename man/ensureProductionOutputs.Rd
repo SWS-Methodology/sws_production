@@ -4,9 +4,17 @@
 \alias{ensureProductionOutputs}
 \title{Check Production Inputs}
 \usage{
-ensureProductionOutputs(data, processingParameters, formulaParameters,
-  testImputed = FALSE, testCalculated = FALSE, domain = "agriculture",
-  dataset = "aproduction", returnData = TRUE, normalised = TRUE)
+ensureProductionOutputs(
+  data,
+  processingParameters,
+  formulaParameters,
+  testImputed = FALSE,
+  testCalculated = FALSE,
+  domain = "agriculture",
+  dataset = "aproduction",
+  returnData = TRUE,
+  normalised = TRUE
+)
 }
 \arguments{
 \item{data}{A data.table containing the data.}
@@ -36,4 +44,3 @@ The original data if all tests are passed
 \description{
 This function is designed to ensure that the dataset to be saved is valid.
 }
-

@@ -19,4 +19,3 @@ See \code{productionFormulaParameters}.}
 \description{
 Function to compute production when new area harvested and yield are given.
 }
-

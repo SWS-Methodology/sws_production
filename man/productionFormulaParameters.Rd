@@ -4,8 +4,13 @@
 \alias{productionFormulaParameters}
 \title{Parameter for formulas}
 \usage{
-productionFormulaParameters(datasetConfig, productionCode = "5510",
-  areaHarvestedCode = "5312", yieldCode = "5416", unitConversion = 1)
+productionFormulaParameters(
+  datasetConfig,
+  productionCode = "5510",
+  areaHarvestedCode = "5312",
+  yieldCode = "5416",
+  unitConversion = 1
+)
 }
 \arguments{
 \item{datasetConfig}{The dataset configuration returned by the function
@@ -49,4 +54,3 @@ Below is a description of the parameters: \itemize{
 \item unitConversion The unit conversion applied in the formula
 }
 }
-
