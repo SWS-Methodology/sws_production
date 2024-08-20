@@ -81,7 +81,20 @@ computeYield = function(data,
     dataCopy[feasibleFilter & nonZeroAreaHarvestedFilter,
              `:=`(c(formulaParameters$yieldObservationFlag),
                   aggregateObservationFlag(get(formulaParameters$productionObservationFlag),
-                                           get(formulaParameters$areaHarvestedObservationFlag)))]
+                                           get(formulaParameters$areaHarvestedObservationFlag),
+                                           flagTable = flagTable))]
+    
+    # OCS2023: Added this in here to fix any issues with (blank) and T flags
+    if(processingParameters$convertOCS2023Flags){
+      dataCopy[get(formulaParameters$yieldObservationFlag) == "",
+               `:=`(c(formulaParameters$yieldObservationFlag),
+                    "A")]
+      
+      dataCopy[get(formulaParameters$yieldObservationFlag) == "T",
+               `:=`(c(formulaParameters$yieldObservationFlag),
+                    "X")]
+    }
+    
     
     ##Assign Observation flag M to that ratio with areaHarvested=0
     dataCopy[feasibleFilter & !nonZeroAreaHarvestedFilter,

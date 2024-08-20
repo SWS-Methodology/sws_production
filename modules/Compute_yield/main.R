@@ -24,9 +24,10 @@ suppressMessages({
     library(sendmailR)
 })
 
-TARGET_DOMAIN = "agriculture"
-TARGET_DATASET = "aproduction"
-#TARGET_DATASET = "ocs2023_aproduction_modified"
+###  DEBUG - REMOVE THIS
+# TARGET_DOMAIN = "agriculture"
+# #TARGET_DATASET = "aproduction"
+# TARGET_DATASET = "ocs2023_aproduction_modified"
 
 ##' Set up for the test environment and parameters
 R_SWS_SHARE_PATH <- Sys.getenv("R_SWS_SHARE_PATH")
@@ -47,16 +48,18 @@ if (CheckDebug()) {
 
 sessionKey = swsContext.datasets[[1]]
 
-sessionKey@domain = TARGET_DOMAIN
-sessionKey@dataset = TARGET_DATASET
+# DEBUG
+# sessionKey@domain = TARGET_DOMAIN
+# sessionKey@dataset = TARGET_DATASET
 
 data <- GetData(sessionKey)
 
-datasetConfig <- GetDatasetConfig(domainCode = TARGET_DOMAIN,
-                                  datasetCode = TARGET_DATASET)
+datasetConfig <- GetDatasetConfig(domainCode = sessionKey@domain,
+                                  datasetCode = sessionKey@dataset)
 
 processingParameters <-
-    productionProcessingParameters(datasetConfig = datasetConfig)
+    productionProcessingParameters(datasetConfig = datasetConfig,
+                                   dataset = sessionKey@dataset)
 
 sessionItems <-
     getQueryKey("measuredItemCPC", sessionKey)
