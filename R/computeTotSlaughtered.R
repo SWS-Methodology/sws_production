@@ -10,14 +10,14 @@
 #' 
 #' @export
 
-computeTotSlaughtered = function(data, FormulaParameters=animalFormulaParameters){
+computeTotSlaughtered = function(data, FormulaParameters=animalFormulaParameters, flagTable_source = ReadDatatable("valid_flags_ocs2023")){
 
 
     ## Data quality checks    
     ## 1) Check if the columns are all there
     ## 2) This function works only if data are dernormalized
     
-    flagValidTable1=ReadDatatable("valid_flags_ocs2023")
+    flagValidTable1=flagTable_source
     flagValidTable1[flagObservationStatus=="I" & flagMethod=="c", Protected:=FALSE]
     flagValidTable1[flagObservationStatus=="E" & flagMethod=="c", Protected:=FALSE]
     flagValidTable1[flagObservationStatus=="E" & flagMethod=="h", Protected:=FALSE]
