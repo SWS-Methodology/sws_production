@@ -224,7 +224,8 @@ imputeProductionTripletOriginal = function(data,
     
     dataCopy = computeYield(dataCopy,
                             processingParameters = processingParameters,
-                            formulaParameters = formulaParameters)
+                            formulaParameters = formulaParameters,
+                            flagTable = ReadDatatable("valid_flags_ocs2023"))
     ## Check whether all values are missing
     allYieldMissing = all(is.na(dataCopy[[formulaParameters$yieldValue]]))
     allProductionMissing = all(is.na(dataCopy[[formulaParameters$productionValue]]))
