@@ -552,7 +552,7 @@ for (iter in seq(selectedMeatCode)) {
         currentNonMeatItem <-
             currentAllDerivedProduct[currentAllDerivedProduct != currentMeatItem]
         
-        itemMap <- GetCodeList(domain = "agriculture", dataset = "aproduction", "measuredItemCPC")
+        itemMap <- GetCodeList(domain = sessionKey@domain, dataset = sessionKey@dataset, "measuredItemCPC")
         stopifnot(nrow(itemMap) > 0)
         
         # Remove offals, hides and skins as there is a dedicated plugin
