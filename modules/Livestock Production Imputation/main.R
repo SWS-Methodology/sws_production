@@ -225,7 +225,7 @@ imputeProductionTripletOriginal = function(data,
     dataCopy = computeYield(dataCopy,
                             processingParameters = processingParameters,
                             formulaParameters = formulaParameters,
-                            flagTable = ReadDatatable("valid_flags_ocs2023"))
+                            flagTable = ReadDatatable("ocs2023_flagweight"))
     ## Check whether all values are missing
     allYieldMissing = all(is.na(dataCopy[[formulaParameters$yieldValue]]))
     allProductionMissing = all(is.na(dataCopy[[formulaParameters$productionValue]]))
@@ -264,7 +264,8 @@ imputeProductionTripletOriginal = function(data,
         dataCopy =
             balanceProduction(data = dataCopy,
                               processingParameters = processingParameters,
-                              formulaParameters = formulaParameters)
+                              formulaParameters = formulaParameters,
+                              flagTable = ReadDatatable("ocs2023_flagweight"))
         
         ## NOTE (Michael): Check again whether production is available
         ##                 now after it is balanced.
@@ -299,7 +300,8 @@ imputeProductionTripletOriginal = function(data,
     dataCopy =
         balanceAreaHarvested(data = dataCopy,
                              processingParameters = processingParameters,
-                             formulaParameters = formulaParameters)
+                             formulaParameters = formulaParameters,
+                             flagTable = ReadDatatable("valid_flags_ocs2023"))
     allAreaMissing = all(is.na(dataCopy[[formulaParameters$areaHarvestedValue]]))
     
     if(!all(allAreaMissing)){
@@ -334,7 +336,8 @@ imputeProductionTripletOriginal = function(data,
         dataCopy =
             computeYield(dataCopy,
                          processingParameters = processingParameters,
-                         formulaParameters = formulaParameters)
+                         formulaParameters = formulaParameters,
+                         flagTable = ReadDatatable("ocs2023_flagweight"))
         dataCopy = imputeVariable(data = dataCopy,
                                   imputationParameters = yieldImputationParameters)
         
@@ -781,7 +784,9 @@ for (iter in seq(selectedMeatCode)) {
         slaughteredParentData <-
             computeTotSlaughtered(
                 data              = stockSlaughtered,
-                FormulaParameters = animalFormulaParameters
+                FormulaParameters = animalFormulaParameters,
+                validFlags = ReadDatatable("valid_flags_ocs2023"), 
+                flagWeights = ReadDatatable("ocs2023_flagweight")
             )
         
         # re assign M- to slaughtered values since the function computeToSlaughtered is turning M- to Mu
@@ -1263,9 +1268,10 @@ for (iter in seq(selectedMeatCode)) {
                       imputationParameters$areaHarvestedParams$imputationMethodColumn),
                     list(
                         newS,
-                        deriveObservationFlag(
+                        aggregateObservationFlag(
                             get(imputationParameters$yieldParams$imputationFlagColumn),
-                            get(imputationParameters$productionParams$imputationFlagColumn)
+                            get(imputationParameters$productionParams$imputationFlagColumn),
+                            flagTable = ReadDatatable("ocs2023_flagweight")
                         ),
                         "i"
                     )
@@ -1287,9 +1293,10 @@ for (iter in seq(selectedMeatCode)) {
                       imputationParameters$productionParams$imputationMethodColumn),
                     list(
                         newP,
-                        deriveObservationFlag(
+                        aggregateObservationFlag(
                             get(imputationParameters$yieldParams$imputationFlagColumn),
-                            get(imputationParameters$productionParams$imputationFlagColumn)
+                            get(imputationParameters$productionParams$imputationFlagColumn),
+                            flagTable = ReadDatatable("ocs2023_flagweight")
                         ),
                         "i"
                     )

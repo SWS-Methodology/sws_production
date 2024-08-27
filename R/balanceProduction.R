@@ -12,7 +12,8 @@
 
 balanceProduction = function(data,
                              processingParameters,
-                             formulaParameters){
+                             formulaParameters,
+                             flagTable = ReadDatatable("flag_weight_table")){
 
     dataCopy = copy(data)
 
@@ -63,8 +64,9 @@ balanceProduction = function(data,
     ## Assign observation flag
     dataCopy[feasibleFilter & nonZeroYieldFilter,
              `:=`(c(formulaParameters$productionObservationFlag),
-                  deriveObservationFlag(get(formulaParameters$areaHarvestedObservationFlag),
-                                           get(formulaParameters$yieldObservationFlag)))]
+                  aggregateObservationFlag(get(formulaParameters$areaHarvestedObservationFlag),
+                                           get(formulaParameters$yieldObservationFlag),
+                                           flagTable = flagTable))]
 
     ## Assign method flag
     dataCopy[feasibleFilter & nonZeroYieldFilter, `:=`(c(formulaParameters$productionMethodFlag),

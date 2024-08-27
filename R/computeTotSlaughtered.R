@@ -5,19 +5,22 @@
 #' reference to compue the take off rates and consequently the number of slaughtered  animals.
 #' In order to compute the total animal stocks, trade has to be taken into account
 #' 
-#' @param data datataset containing the the numeber of animal stocks (trade not included)
+#' @param data dataset containing the the number of animal stocks (trade not included)
+#' @param validFlags table of valid flags. Uses Datatable \code{valid_flags} by default, but should use \code{valid_flags_ocs2023}
+#' @parame flagWeights table. Uses Datatable \code{flag_weight_table} by default, but should use \code{ocs2023_flagweight}
 #' @return Returns a dataset with the the tot stock 
 #' 
 #' @export
 
-computeTotSlaughtered = function(data, FormulaParameters=animalFormulaParameters, flagTable_source = ReadDatatable("valid_flags_ocs2023")){
+computeTotSlaughtered = function(data, FormulaParameters=animalFormulaParameters, validFlags = ReadDatatable("valid_flags"),
+                                 flagWeights = ReadDatatable("flag_weight_table")){
 
 
     ## Data quality checks    
     ## 1) Check if the columns are all there
     ## 2) This function works only if data are dernormalized
     
-    flagValidTable1=flagTable_source
+    flagValidTable1=validFlags
     flagValidTable1[flagObservationStatus=="I" & flagMethod=="c", Protected:=FALSE]
     flagValidTable1[flagObservationStatus=="E" & flagMethod=="c", Protected:=FALSE]
     flagValidTable1[flagObservationStatus=="E" & flagMethod=="h", Protected:=FALSE]
@@ -41,8 +44,9 @@ computeTotSlaughtered = function(data, FormulaParameters=animalFormulaParameters
     data[!is.na(takeOffRate)& 
              !is.na(get(animalFormulaParameters$areaHarvestedObservationFlag)) &
              !is.na(get(animalFormulaParameters$productionObservationFlag)),
-         TakeOffFlagObservationStatus:=deriveObservationFlag(get(animalFormulaParameters$areaHarvestedObservationFlag),
-                                                                get(animalFormulaParameters$productionObservationFlag))]
+         TakeOffFlagObservationStatus:=aggregateObservationFlag(get(animalFormulaParameters$areaHarvestedObservationFlag),
+                                                                get(animalFormulaParameters$productionObservationFlag),
+                                                                flagTable = flagWeights)]
     
     data[,TakeOffRateFlagMethod:="u"]
     ## I chose the "c" method flag just to "protect" the computed Off take rate

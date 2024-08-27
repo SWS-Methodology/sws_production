@@ -12,7 +12,8 @@
 
 balanceAreaHarvested = function(data,
                                 processingParameters,
-                                formulaParameters){
+                                formulaParameters,
+                                flagTable = ReadDatatable("flag_weight_table")){
 
 
     dataCopy = copy(data)
@@ -66,8 +67,9 @@ balanceAreaHarvested = function(data,
     ## NOTE (Michael): Although the yield should never be zero by definition.
     dataCopy[feasibleFilter & nonZeroYieldFilter,
              `:=`(c(formulaParameters$areaHarvestedObservationFlag),
-                  deriveObservationFlag(get(formulaParameters$productionObservationFlag),
-                                           get(formulaParameters$yieldObservationFlag)))]
+                  aggregateObservationFlag(get(formulaParameters$productionObservationFlag),
+                                           get(formulaParameters$yieldObservationFlag),
+                                           flagTable = flagTable))]
     
     dataCopy[feasibleFilter & !nonZeroYieldFilter,
              `:=`(c(formulaParameters$areaHarvestedObservationFlag),
