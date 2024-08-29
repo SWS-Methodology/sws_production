@@ -301,7 +301,7 @@ imputeProductionTripletOriginal = function(data,
         balanceAreaHarvested(data = dataCopy,
                              processingParameters = processingParameters,
                              formulaParameters = formulaParameters,
-                             flagTable = ReadDatatable("valid_flags_ocs2023"))
+                             flagTable = ReadDatatable("ocs2023_flagweight"))
     allAreaMissing = all(is.na(dataCopy[[formulaParameters$areaHarvestedValue]]))
     
     if(!all(allAreaMissing)){
