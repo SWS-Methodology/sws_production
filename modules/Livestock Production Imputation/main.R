@@ -98,7 +98,7 @@ suppressMessages({
     library(faoswsFlag)
     library(faoswsUtil)
     library(faoswsImputation)
-    library(faoswsProduction)
+    #library(faoswsProduction)
     library(faoswsProcessing)
     library(faoswsEnsure)
     library(magrittr)
@@ -1844,15 +1844,15 @@ body_message <- sprintf(
     If some protected figures have been overwritten, please check ToBeChecked.csv file")
 
 if (!CheckDebug()) {
-    send_mail(
-        from <- "sws@fao.org",
-        to <- swsContext.userEmail,
-        subject <- "Livestock module",
-        body = c(body_message,
-                 tmp_file_Not_balanced_triplet,
-                 tmp_file_ToBeChecked
-        )
-    )
+    # send_mail(
+    #     from <- "sws@fao.org",
+    #     to <- swsContext.userEmail,
+    #     subject <- "Livestock module",
+    #     body = c(body_message,
+    #              tmp_file_Not_balanced_triplet,
+    #              tmp_file_ToBeChecked
+    #     )
+    # )
 }
 
 ##' ---
@@ -1860,21 +1860,21 @@ if (!CheckDebug()) {
 
 if (nrow(imputationResult) > 0 & !CheckDebug()) {
     ## Initiate email
-    from <- "sws@fao.org"
-    to <- swsContext.userEmail
-    subject <- "Imputation Result"
-    body <- paste0("The following items failed, please inform the maintainer "
-                   , "of the module")
-    
-    
-    write.csv(imputationResult, tmp_file_no_ls)
-    
-    
-    bodyWithAttachment <- tmp_file_no_ls
-    send_mail(from = "no-reply@fao.org", 
-              to = swsContext.userEmail,
-              subject = "Imputation Result", 
-              body = c(body,bodyWithAttachment))
+    # from <- "sws@fao.org"
+    # to <- swsContext.userEmail
+    # subject <- "Imputation Result"
+    # body <- paste0("The following items failed, please inform the maintainer "
+    #                , "of the module")
+    # 
+    # 
+    # write.csv(imputationResult, tmp_file_no_ls)
+    # 
+    # 
+    # bodyWithAttachment <- tmp_file_no_ls
+    # send_mail(from = "no-reply@fao.org", 
+    #           to = swsContext.userEmail,
+    #           subject = "Imputation Result", 
+    #           body = c(body,bodyWithAttachment))
     stop("Production imputation incomplete, check following email to see where ",
          " it failed")
 }
