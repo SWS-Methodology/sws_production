@@ -191,7 +191,8 @@ imputeProductionTripletOriginal = function(data,
 
     dataCopy = computeYield(dataCopy,
                             processingParameters = processingParameters,
-                            formulaParameters = formulaParameters)
+                            formulaParameters = formulaParameters,
+                            flagTable = ReadDatatable("ocs2023_flagweight"))
     ## Check whether all values are missing
     allYieldMissing = all(is.na(dataCopy[[formulaParameters$yieldValue]]))
     allProductionMissing = all(is.na(dataCopy[[formulaParameters$productionValue]]))
@@ -230,7 +231,8 @@ imputeProductionTripletOriginal = function(data,
         dataCopy =
             balanceProduction(data = dataCopy,
                               processingParameters = processingParameters,
-                              formulaParameters = formulaParameters)
+                              formulaParameters = formulaParameters,
+                              flagTable = ReadDatatable("ocs2023_flagweight"))
 
         ## NOTE (Michael): Check again whether production is available
         ##                 now after it is balanced.
@@ -265,7 +267,8 @@ imputeProductionTripletOriginal = function(data,
     dataCopy =
         balanceAreaHarvested(data = dataCopy,
                              processingParameters = processingParameters,
-                             formulaParameters = formulaParameters)
+                             formulaParameters = formulaParameters,
+                             flagTable = ReadDatatable("ocs2023_flagweight"))
     allAreaMissing = all(is.na(dataCopy[[formulaParameters$areaHarvestedValue]]))
 
     if(!all(allAreaMissing)){
@@ -300,7 +303,8 @@ imputeProductionTripletOriginal = function(data,
         dataCopy =
             computeYield(dataCopy,
                          processingParameters = processingParameters,
-                         formulaParameters = formulaParameters)
+                         formulaParameters = formulaParameters,
+                         flagTable = ReadDatatable("ocs2023_flagweight"))
         dataCopy = imputeVariable(data = dataCopy,
                                   imputationParameters = yieldImputationParameters)
 
@@ -542,7 +546,9 @@ for (iter in seq(selectedItemCode)) {
         ##            newYears= lastYear) %>%
 
         ##' RemoveNon protected flag applied in the range of the starting Year
-        processedData <- removeNonProtectedFlag(processedData, keepDataUntil = (lastYear - (lastYear - imputationStartYear)))
+        processedData <- removeNonProtectedFlag(processedData, 
+                                                keepDataUntil = (lastYear - (lastYear - imputationStartYear)),
+                                                flagValidTable = ReadDatatable("valid_flags_ocs2023"))
         #
         # if (imputationTimeWindow == "all") {
         #     processedData <- removeNonProtectedFlag(processedData)
@@ -722,7 +728,8 @@ for (iter in seq(selectedItemCode)) {
                 c(formulaParameters$yieldObservationFlag),
                 aggregateObservationFlag(
                     get(formulaParameters$productionObservationFlag),
-                    get(formulaParameters$areaHarvestedObservationFlag)
+                    get(formulaParameters$areaHarvestedObservationFlag),
+                    flagTable = ReadDatatable("ocs2023_flagweight")
                 )
             )
             ]
