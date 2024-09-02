@@ -53,7 +53,7 @@ suppressMessages({
     library(faoswsUtil)
     library(faoswsFlag)
     library(faoswsImputation)
-    library(faoswsProduction)
+    #library(faoswsProduction)
     library(faoswsProcessing)
     library(faoswsEnsure)
     library(magrittr)
@@ -403,6 +403,11 @@ eu_list <- geographic_table[, geographicAreaM49]
 ##' Get the full imputation Datakey
 completeImputationKey <- getCompleteImputationKey("production")
 
+# Set complete imputation key to be the same as that of the source dataset
+# It seems like a minor thing, but it allows the module to be run on test datasets
+
+completeImputationKey@dataset = sessionKey@dataset
+
 # Exclude 835, which is in QA but not in LIVE
 
 completeImputationKey@dimensions$geographicAreaM49@keys <-
@@ -649,8 +654,8 @@ for (iter in seq(selectedItemCode)) {
         pre_official <- copy(officialData_expanded)
 
 
-        pre_official <- pre_official[(flagObservationStatus == "") | (flagObservationStatus == "E" & flagMethod == "f")|
-                                         (flagObservationStatus == "T"),
+        pre_official <- pre_official[(flagObservationStatus %in% c("", "A") | (flagObservationStatus == "E" & flagMethod == "f")|
+                                         (flagObservationStatus %in% c("T", "X"),
                                      .SD[which.min(timePointYears)], by = c("measuredElement", "geographicAreaM49")]
 
         ##' to do : check the merge criteria with a hole imputed time serie ... with Ie present of course!
