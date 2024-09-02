@@ -353,12 +353,12 @@ imputationSelection <- swsContext.computationParams$imputation_selection
 # DEBUG
 
 #imputationStartYear <- as.numeric(swsContext.computationParams$start_year)
-imputationStartYear <- 2000
+#imputationStartYear <- 2000
 ##' Check the validity of the computational parameter
 stopifnot(imputationStartYear >= 1991)
 
 #DEBUG
-imputationSelection = "session"
+#imputationSelection = "session"
 
 if(!imputationSelection %in% c("session", "all"))
     stop("Incorrect imputation selection specified")
@@ -380,7 +380,7 @@ processingParameters <-
 lastYear=as.numeric(swsContext.computationParams$last_year)
 
 #DEBUG
-lastYear=2021
+#lastYear=2021
 
 
 ## Inserting the list of EU countries declared in the MoU. If the user decide to exclude them from the imputation
@@ -629,6 +629,10 @@ for (iter in seq(selectedItemCode)) {
                 newYears   = lastYear
             )
 
+        
+        # Sebastian: This throws a warning due to faoswsProcessing throwing it
+        # if a table contains _only_ missing values. It doesn't seem to affect
+        # the output in a detrimental way
         toBeImputed_expanded <-
             expandYear(
                 data       = toBeImputed,
