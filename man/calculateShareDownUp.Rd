@@ -7,8 +7,14 @@ This function has been written to be used in the DerivedCommodies_submodule whic
 That's why this kind of shares are used to transform the derived into its direct parent.
 that it is allocated in different productive processes.}
 \usage{
-calculateShareDownUp(data, tree, printNegativeAvailability = FALSE, params,
-  printDirectory = NULL, useAllSUAcomponents = FALSE)
+calculateShareDownUp(
+  data,
+  tree,
+  printNegativeAvailability = FALSE,
+  params,
+  printDirectory = NULL,
+  useAllSUAcomponents = FALSE
+)
 }
 \arguments{
 \item{data}{input data.table: SUA table}
@@ -30,4 +36,3 @@ This function has been written to be used in the DerivedCommodies_submodule whic
 That's why this kind of shares are used to transform the derived into its direct parent.
 that it is allocated in different productive processes.
 }
-

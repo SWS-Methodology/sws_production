@@ -98,7 +98,7 @@ suppressMessages({
     library(faoswsFlag)
     library(faoswsUtil)
     library(faoswsImputation)
-    library(faoswsProduction)
+    #library(faoswsProduction)
     library(faoswsProcessing)
     library(faoswsEnsure)
     library(magrittr)
@@ -224,7 +224,8 @@ imputeProductionTripletOriginal = function(data,
     
     dataCopy = computeYield(dataCopy,
                             processingParameters = processingParameters,
-                            formulaParameters = formulaParameters)
+                            formulaParameters = formulaParameters,
+                            flagTable = ReadDatatable("ocs2023_flagweight"))
     ## Check whether all values are missing
     allYieldMissing = all(is.na(dataCopy[[formulaParameters$yieldValue]]))
     allProductionMissing = all(is.na(dataCopy[[formulaParameters$productionValue]]))
@@ -263,7 +264,8 @@ imputeProductionTripletOriginal = function(data,
         dataCopy =
             balanceProduction(data = dataCopy,
                               processingParameters = processingParameters,
-                              formulaParameters = formulaParameters)
+                              formulaParameters = formulaParameters,
+                              flagTable = ReadDatatable("ocs2023_flagweight"))
         
         ## NOTE (Michael): Check again whether production is available
         ##                 now after it is balanced.
@@ -298,7 +300,8 @@ imputeProductionTripletOriginal = function(data,
     dataCopy =
         balanceAreaHarvested(data = dataCopy,
                              processingParameters = processingParameters,
-                             formulaParameters = formulaParameters)
+                             formulaParameters = formulaParameters,
+                             flagTable = ReadDatatable("ocs2023_flagweight"))
     allAreaMissing = all(is.na(dataCopy[[formulaParameters$areaHarvestedValue]]))
     
     if(!all(allAreaMissing)){
@@ -333,7 +336,8 @@ imputeProductionTripletOriginal = function(data,
         dataCopy =
             computeYield(dataCopy,
                          processingParameters = processingParameters,
-                         formulaParameters = formulaParameters)
+                         formulaParameters = formulaParameters,
+                         flagTable = ReadDatatable("ocs2023_flagweight"))
         dataCopy = imputeVariable(data = dataCopy,
                                   imputationParameters = yieldImputationParameters)
         
@@ -373,11 +377,7 @@ if (CheckDebug()) {
     
     ## If you're not on the system, your settings will overwrite any others
     R_SWS_SHARE_PATH <- SETTINGS[["share"]]
-    
-    ## Define where your certificates are stored
-    SetClientFiles(SETTINGS[["certdir"]])
-    #SetClientFiles("C:/Users/Lombardili/OneDrive - Food and Agriculture Organization/Livia/certificates/production")
-    
+
     ## Get session information from SWS. Token must be obtained from web interface
     GetTestEnvironment(SETTINGS[["server"]], SETTINGS[["token"]])
 }
@@ -512,14 +512,14 @@ selectedMeatCode <-
 
 ##' Here we iterate through the the meat item to perform the steps described in
 ##' the description. Essentially, we are looping over different livestock trees.
-if (CheckDebug()) {
-    logConsole1 <- file("log.txt",open = "w")
-    sink(file = logConsole1, append = TRUE, type = "message")
-}
+# if (CheckDebug()) {
+#     logConsole1 <- file("log.txt",open = "w")
+#     sink(file = logConsole1, append = TRUE, type = "message")
+# }
 
 # NOTE: this used to come from the faoswsFlag package.
 # XXX: There are some discrepancies in the two tables (pkg and SWS)
-flagValidTable <- ReadDatatable("valid_flags")
+flagValidTable <- ReadDatatable("valid_flags_ocs2023")
 stopifnot(nrow(flagValidTable) > 0)
 
 imputationResult <- data.table()
@@ -552,7 +552,7 @@ for (iter in seq(selectedMeatCode)) {
         currentNonMeatItem <-
             currentAllDerivedProduct[currentAllDerivedProduct != currentMeatItem]
         
-        itemMap <- GetCodeList(domain = "agriculture", dataset = "aproduction", "measuredItemCPC")
+        itemMap <- GetCodeList(domain = sessionKey@domain, dataset = sessionKey@dataset, "measuredItemCPC")
         stopifnot(nrow(itemMap) > 0)
         
         # Remove offals, hides and skins as there is a dedicated plugin
@@ -629,7 +629,8 @@ for (iter in seq(selectedMeatCode)) {
         ## This condition allow to use also the NON-protected data to build the imputations
         ## for last three years in case you have chosed to produce imputations only for last
         ## three years
-        animalData <- removeNonProtectedFlag(animalData, keepDataUntil = (lastYear - (lastYear - imputationStartYear)))
+        animalData <- removeNonProtectedFlag(animalData, keepDataUntil = (lastYear - (lastYear - imputationStartYear)),
+                                             flagValidTable = ReadDatatable("valid_flags_ocs2023"))
         
         # if (imputationTimeWindow == "all") {
         #   animalData <- removeNonProtectedFlag(animalData)
@@ -728,7 +729,8 @@ for (iter in seq(selectedMeatCode)) {
             preProcessing(data = .)
         
         slaughteredAnimalData <- removeNonProtectedFlag(slaughteredAnimalData, 
-                                                        keepDataUntil = (lastYear - (lastYear - imputationStartYear)))
+                                                        keepDataUntil = (lastYear - (lastYear - imputationStartYear)),
+                                                        flagValidTable = ReadDatatable("valid_flags_ocs2023"))
         
         # if (imputationTimeWindow == "all") {
         #   slaughteredAnimalData <- removeNonProtectedFlag(slaughteredAnimalData)
@@ -739,7 +741,7 @@ for (iter in seq(selectedMeatCode)) {
         # }
         
         slaughteredAnimalData <-
-            removeNonProtectedFlag(slaughteredAnimalData) %>%
+            removeNonProtectedFlag(slaughteredAnimalData, flagValidTable = ReadDatatable("valid_flags_ocs2023")) %>%
             expandYear(
                 data = .,
                 areaVar    = processingParameters$areaVar,
@@ -782,7 +784,9 @@ for (iter in seq(selectedMeatCode)) {
         slaughteredParentData <-
             computeTotSlaughtered(
                 data              = stockSlaughtered,
-                FormulaParameters = animalFormulaParameters
+                FormulaParameters = animalFormulaParameters,
+                validFlags = ReadDatatable("valid_flags_ocs2023"), 
+                flagWeights = ReadDatatable("ocs2023_flagweight")
             )
         
         # re assign M- to slaughtered values since the function computeToSlaughtered is turning M- to Mu
@@ -903,9 +907,10 @@ for (iter in seq(selectedMeatCode)) {
         ## Get the meat data
         meatData <- GetData(key = meatKey)
         meatData <- preProcessing(data = meatData)
-        meatData <- removeInvalidFlag(meatData)
+        meatData <- removeInvalidFlag(meatData, flagValidTable = ReadDatatable("valid_flags_ocs2023"))
         
-        meatData <- removeNonProtectedFlag(meatData, keepDataUntil = (lastYear - (lastYear - imputationStartYear)))
+        meatData <- removeNonProtectedFlag(meatData, keepDataUntil = (lastYear - (lastYear - imputationStartYear)),
+                                           flagValidTable = ReadDatatable("valid_flags_ocs2023"))
         
         # if (imputationTimeWindow == "all") {
         #   meatData <- removeNonProtectedFlag(meatData)
@@ -1040,7 +1045,7 @@ for (iter in seq(selectedMeatCode)) {
             )
         
         ##Obtain a vector containing all the protected flag combinations
-        ProtectedFlag <- getProtectedFlag()
+        ProtectedFlag <- getProtectedFlag(flag_table = "valid_flags_ocs2023")
         
         ##I have to exclude (M,-) from the protected flag combinations. Doing the checks for the carcass weight to
         ##free, otherwise I risk to open closed series:
@@ -1265,7 +1270,8 @@ for (iter in seq(selectedMeatCode)) {
                         newS,
                         aggregateObservationFlag(
                             get(imputationParameters$yieldParams$imputationFlagColumn),
-                            get(imputationParameters$productionParams$imputationFlagColumn)
+                            get(imputationParameters$productionParams$imputationFlagColumn),
+                            flagTable = ReadDatatable("ocs2023_flagweight")
                         ),
                         "i"
                     )
@@ -1289,7 +1295,8 @@ for (iter in seq(selectedMeatCode)) {
                         newP,
                         aggregateObservationFlag(
                             get(imputationParameters$yieldParams$imputationFlagColumn),
-                            get(imputationParameters$productionParams$imputationFlagColumn)
+                            get(imputationParameters$productionParams$imputationFlagColumn),
+                            flagTable = ReadDatatable("ocs2023_flagweight")
                         ),
                         "i"
                     )
@@ -1418,7 +1425,8 @@ for (iter in seq(selectedMeatCode)) {
                         flagMethod == "i" |
                         flagMethod == "c",
                     ],
-                getInvalidData = TRUE
+                getInvalidData = TRUE,
+                flagTable = ReadDatatable("valid_flags_ocs2023")
             )
         
         ProtectedOverwritten <- ProtectedOverwritten[measuredElement != imputationParameters$areaHarvestedParams$variable]
@@ -1632,7 +1640,8 @@ for (iter in seq(selectedMeatCode)) {
                 modifiedFlagTable[flagObservationStatus == "I" & flagMethod == "-" , Protected := TRUE]
                 
                 nonMeatData <- removeNonProtectedFlag(nonMeatData, flagValidTable = modifiedFlagTable,
-                                                      keepDataUntil = (lastYear - (lastYear - imputationStartYear)))
+                                                      keepDataUntil = (lastYear - (lastYear - imputationStartYear)),
+                                                      flagValidTable = ReadDatatable("valid_flags_ocs2023"))
                 
                 # if (imputationTimeWindow == "all") {
                 #   nonMeatData = removeNonProtectedFlag(nonMeatData, flagValidTable = modifiedFlagTable)
@@ -1835,15 +1844,15 @@ body_message <- sprintf(
     If some protected figures have been overwritten, please check ToBeChecked.csv file")
 
 if (!CheckDebug()) {
-    send_mail(
-        from <- "sws@fao.org",
-        to <- swsContext.userEmail,
-        subject <- "Livestock module",
-        body = c(body_message,
-                 tmp_file_Not_balanced_triplet,
-                 tmp_file_ToBeChecked
-        )
-    )
+    # send_mail(
+    #     from <- "sws@fao.org",
+    #     to <- swsContext.userEmail,
+    #     subject <- "Livestock module",
+    #     body = c(body_message,
+    #              tmp_file_Not_balanced_triplet,
+    #              tmp_file_ToBeChecked
+    #     )
+    # )
 }
 
 ##' ---
@@ -1851,21 +1860,21 @@ if (!CheckDebug()) {
 
 if (nrow(imputationResult) > 0 & !CheckDebug()) {
     ## Initiate email
-    from <- "sws@fao.org"
-    to <- swsContext.userEmail
-    subject <- "Imputation Result"
-    body <- paste0("The following items failed, please inform the maintainer "
-                   , "of the module")
-    
-    
-    write.csv(imputationResult, tmp_file_no_ls)
-    
-    
-    bodyWithAttachment <- tmp_file_no_ls
-    send_mail(from = "no-reply@fao.org", 
-              to = swsContext.userEmail,
-              subject = "Imputation Result", 
-              body = c(body,bodyWithAttachment))
+    # from <- "sws@fao.org"
+    # to <- swsContext.userEmail
+    # subject <- "Imputation Result"
+    # body <- paste0("The following items failed, please inform the maintainer "
+    #                , "of the module")
+    # 
+    # 
+    # write.csv(imputationResult, tmp_file_no_ls)
+    # 
+    # 
+    # bodyWithAttachment <- tmp_file_no_ls
+    # send_mail(from = "no-reply@fao.org", 
+    #           to = swsContext.userEmail,
+    #           subject = "Imputation Result", 
+    #           body = c(body,bodyWithAttachment))
     stop("Production imputation incomplete, check following email to see where ",
          " it failed")
 }

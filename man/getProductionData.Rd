@@ -4,9 +4,13 @@
 \alias{getProductionData}
 \title{Get Production Data}
 \usage{
-getProductionData(dataContext, areaVar = "geographicAreaM49",
-  itemVar = "measuredItemCPC", elementVar = "measuredElement",
-  yearVar = "timePointYears")
+getProductionData(
+  dataContext,
+  areaVar = "geographicAreaM49",
+  itemVar = "measuredItemCPC",
+  elementVar = "measuredElement",
+  yearVar = "timePointYears"
+)
 }
 \arguments{
 \item{dataContext}{An object of type DatasetKey (defined in faosws).  This
@@ -37,4 +41,3 @@ This function returns the production data currently in the database for a
 particular DatasetKey.  It also performs a few clean-up operations on the
 data before directly returning.
 }
-

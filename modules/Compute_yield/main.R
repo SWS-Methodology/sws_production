@@ -24,6 +24,11 @@ suppressMessages({
     library(sendmailR)
 })
 
+###  DEBUG - REMOVE THIS
+# TARGET_DOMAIN = "agriculture"
+# #TARGET_DATASET = "aproduction"
+# TARGET_DATASET = "ocs2023_aproduction_modified"
+
 ##' Set up for the test environment and parameters
 R_SWS_SHARE_PATH <- Sys.getenv("R_SWS_SHARE_PATH")
 
@@ -35,29 +40,32 @@ if (CheckDebug()) {
     ## If you're not on the system, your settings will overwrite any others
     R_SWS_SHARE_PATH <- SETTINGS[["share"]]
     
-    ## Define where your certificates are stored
-    SetClientFiles(SETTINGS[["certdir"]])
-    
     ## Get session information from SWS. Token must be obtained from web interface
     
     GetTestEnvironment(baseUrl = SETTINGS[["server"]],
                        token = SETTINGS[["token"]])
 }
 
-
 sessionKey = swsContext.datasets[[1]]
+
+# DEBUG
+# sessionKey@domain = TARGET_DOMAIN
+# sessionKey@dataset = TARGET_DATASET
 
 data <- GetData(sessionKey)
 
-datasetConfig <- GetDatasetConfig(domainCode = "agriculture",
-                                  datasetCode = "aproduction")
+datasetConfig <- GetDatasetConfig(domainCode = sessionKey@domain,
+                                  datasetCode = sessionKey@dataset)
 
 processingParameters <-
-    productionProcessingParameters(datasetConfig = datasetConfig)
+    productionProcessingParameters(datasetConfig = datasetConfig,
+                                   dataset = sessionKey@dataset)
 
 sessionItems <-
     getQueryKey("measuredItemCPC", sessionKey)
 
+
+FLAG_TABLE <- ReadDatatable("ocs2023_flagweight")
 
 for (iter in seq(sessionItems)) {
     
@@ -105,8 +113,8 @@ for (iter in seq(sessionItems)) {
             next
         }
         
-        if (nrow(extractedData[measuredElement %in% formulaTable$productivity & flagObservationStatus %in% "" 
-                               & flagMethod %in% "q",]) > 0) {
+        if (nrow(extractedData[measuredElement %in% formulaTable$productivity & flagObservationStatus %in% c("A", "") 
+                          & flagMethod %in% "q",]) > 0) {
             message("Item : ", currentItem, " has a protected productivity value")
             next
         }
@@ -149,7 +157,8 @@ for (iter in seq(sessionItems)) {
         
         computed_Data = computeYield(processedData,
                                      processingParameters = processingParameters,
-                                     formulaParameters = formulaParameters)
+                                     formulaParameters = formulaParameters,
+                                     flagTable = FLAG_TABLE)
         
         computed_Data <-
             normalise(

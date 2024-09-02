@@ -11,4 +11,3 @@ getSUADataRestricted()
 This function pull the SUA table necessary to compute the availabilities
 for computing the processed item productions.
 }
-

@@ -51,69 +51,87 @@ computeYield = function(data,
   ##This idea is not in line with the original approach of the module: the yield should have been     
   ##nonZeroProduction =
   ##    (dataCopy[[formulaParameters$productionValue]] != 0)
-  
-  feasibleFilter =
-    missingYield &
-    nonMissingProduction &
-    nonMissingAreaHarvested
-  ## & nonZeroProduction
-  
-  ## When area harvested (denominator) is zero, the calculation can be
-  ## performed and returns NA. So a different flag should (see later)
-  nonZeroAreaHarvestedFilter =
-    (dataCopy[[formulaParameters$areaHarvestedValue]] != 0)
-  
-  
-  
-  ## Calculate the yield and assign observation and method flag
-  dataCopy[feasibleFilter, c(formulaParameters$yieldValue, 
-                             formulaParameters$yieldObservationFlag, 
-                             formulaParameters$yieldMethodFlag) := 
-             deriveRatio(get(formulaParameters$productionValue),
-                         get(formulaParameters$productionObservationFlag),
-                         get(formulaParameters$areaHarvestedValue),
-                         get(formulaParameters$areaHarvestedObservationFlag))]
-  
-  ## Convert yield unit
-  dataCopy[feasibleFilter, c(formulaParameters$yieldValue) := 
-             get(formulaParameters$yieldValue) * formulaParameters$unitConversion]
-  
-  ##Assign Observation flag M to that ratio with areaHarvested=0
-  dataCopy[feasibleFilter & !nonZeroAreaHarvestedFilter,
-           `:=`(c(formulaParameters$yieldObservationFlag),
-                processingParameters$missingValueObservationFlag)]
-  
-  dataCopy[feasibleFilter & !nonZeroAreaHarvestedFilter,
-           `:=`(c(formulaParameters$yieldMethodFlag),
-                processingParameters$missingValueMethodFlag)]
-  
-  ## Assign method flag i to that ratio with areaHarvested!=0
-  dataCopy[feasibleFilter & nonZeroAreaHarvestedFilter,
-           `:=`(c(formulaParameters$yieldMethodFlag),
-                processingParameters$balanceMethodFlag)]
-  ##--------------------------------------------------------------------------------------------    
-  
-  ## If  Prod or Area Harvested is (M,-) also yield should be flagged as (M,-)
-  
-  MdashProduction =  dataCopy[,get(formulaParameters$productionObservationFlag)==processingParameters$missingValueObservationFlag
-                              & get(formulaParameters$productionMethodFlag)=="-"]
-  blockFilterProd= MdashProduction & missingYield
-  
-  dataCopy[blockFilterProd ,
-           `:=`(c(formulaParameters$yieldValue,formulaParameters$yieldObservationFlag,formulaParameters$yieldMethodFlag),
-                list(NA_real_,processingParameters$missingValueObservationFlag, "-"))]
-  
-  
-  
-  # 
-  # MdashAreaHarvested= dataCopy[,get(formulaParameters$areaHarvestedObservationFlag)==processingParameters$missingValueObservationFlag
-  #                              & get(formulaParameters$areaHarvestedMethodFlag)=="-"]
-  # 
-  # blockFilterAreaHarv= MdashAreaHarvested & missingYield
-  # 
-  # dataCopy[blockFilterAreaHarv ,
-  #          `:=`(c(formulaParameters$yieldValue,formulaParameters$yieldObservationFlag,formulaParameters$yieldMethodFlag),
-  #               list(NA_real_,processingParameters$missingValueObservationFlag, "-"))]
-  
-  return(dataCopy)
+    
+    feasibleFilter =
+        missingYield &
+        nonMissingProduction &
+        nonMissingAreaHarvested
+   ## & nonZeroProduction
+    
+    ## When area harvested (denominator) is zero, the calculation can be
+    ## performed and returns NA. So a different flag should (see later)
+    nonZeroAreaHarvestedFilter =
+        (dataCopy[[formulaParameters$areaHarvestedValue]] != 0)
+    
+    
+    
+    ## Calculate the yield
+    dataCopy[feasibleFilter, `:=`(c(formulaParameters$yieldValue),
+                                  computeRatio(get(formulaParameters$productionValue),
+                                               get(formulaParameters$areaHarvestedValue)) *
+                                      formulaParameters$unitConversion)]
+    
+   
+    
+    ## Assign observation flag.
+    ##
+    ## NOTE (Michael): If the denominator (area harvested is non-zero) then
+    ##                 perform flag aggregation, if the denominator is zero,
+    ##                 then assign the missing flag as the computed yield is NA.
+    dataCopy[feasibleFilter & nonZeroAreaHarvestedFilter,
+             `:=`(c(formulaParameters$yieldObservationFlag),
+                  aggregateObservationFlag(get(formulaParameters$productionObservationFlag),
+                                           get(formulaParameters$areaHarvestedObservationFlag),
+                                           flagTable = flagTable))]
+    
+    # OCS2023: Added this in here to fix any issues with (blank) and T flags
+    if(processingParameters$convertOCS2023Flags){
+      dataCopy[get(formulaParameters$yieldObservationFlag) == "",
+               `:=`(c(formulaParameters$yieldObservationFlag),
+                    "A")]
+      
+      dataCopy[get(formulaParameters$yieldObservationFlag) == "T",
+               `:=`(c(formulaParameters$yieldObservationFlag),
+                    "X")]
+    }
+    
+    
+    ##Assign Observation flag M to that ratio with areaHarvested=0
+    dataCopy[feasibleFilter & !nonZeroAreaHarvestedFilter,
+             `:=`(c(formulaParameters$yieldObservationFlag),
+                  processingParameters$missingValueObservationFlag)]
+    
+    dataCopy[feasibleFilter & !nonZeroAreaHarvestedFilter,
+             `:=`(c(formulaParameters$yieldMethodFlag),
+                  processingParameters$missingValueMethodFlag)]
+    
+    ## Assign method flag i to that ratio with areaHarvested!=0
+    dataCopy[feasibleFilter & nonZeroAreaHarvestedFilter,
+             `:=`(c(formulaParameters$yieldMethodFlag),
+                  processingParameters$balanceMethodFlag)]
+    ##--------------------------------------------------------------------------------------------    
+    
+    ## If  Prod or Area Harvested is (M,-) also yield should be flagged as (M,-)
+
+    MdashProduction =  dataCopy[,get(formulaParameters$productionObservationFlag)==processingParameters$missingValueObservationFlag
+                                & get(formulaParameters$productionMethodFlag)=="-"]
+    blockFilterProd= MdashProduction & missingYield
+    
+    dataCopy[blockFilterProd ,
+             `:=`(c(formulaParameters$yieldValue,formulaParameters$yieldObservationFlag,formulaParameters$yieldMethodFlag),
+                  list(NA_real_,processingParameters$missingValueObservationFlag, "-"))]
+    
+    
+    
+    # 
+    # MdashAreaHarvested= dataCopy[,get(formulaParameters$areaHarvestedObservationFlag)==processingParameters$missingValueObservationFlag
+    #                              & get(formulaParameters$areaHarvestedMethodFlag)=="-"]
+    # 
+    # blockFilterAreaHarv= MdashAreaHarvested & missingYield
+    # 
+    # dataCopy[blockFilterAreaHarv ,
+    #          `:=`(c(formulaParameters$yieldValue,formulaParameters$yieldObservationFlag,formulaParameters$yieldMethodFlag),
+    #               list(NA_real_,processingParameters$missingValueObservationFlag, "-"))]
+    
+    return(dataCopy)
 }
