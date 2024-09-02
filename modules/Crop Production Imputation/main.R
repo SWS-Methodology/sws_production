@@ -890,14 +890,14 @@ body_message <- sprintf(
     please check non_livestock_imputation_result.csv")
 
 if (!CheckDebug()) {
-    send_mail(
-        from <- "sws@fao.org",
-        to <- swsContext.userEmail,
-        subject <- "Crops module",
-        body = c(body_message,
-                 tmp_file_no_imputed
-        )
-    )
+    # send_mail(
+    #     from <- "sws@fao.org",
+    #     to <- swsContext.userEmail,
+    #     subject <- "Crops module",
+    #     body = c(body_message,
+    #              tmp_file_no_imputed
+    #     )
+    # )
 }
 
 unlink(TMP_DIR, recursive = TRUE)
