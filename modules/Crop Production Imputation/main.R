@@ -352,7 +352,7 @@ imputationSelection <- swsContext.computationParams$imputation_selection
 
 # DEBUG
 
-#imputationStartYear <- as.numeric(swsContext.computationParams$start_year)
+imputationStartYear <- as.numeric(swsContext.computationParams$start_year)
 #imputationStartYear <- 2000
 ##' Check the validity of the computational parameter
 stopifnot(imputationStartYear >= 1991)
