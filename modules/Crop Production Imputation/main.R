@@ -655,7 +655,7 @@ for (iter in seq(selectedItemCode)) {
 
 
         pre_official <- pre_official[(flagObservationStatus %in% c("", "A") | (flagObservationStatus == "E" & flagMethod == "f")|
-                                         (flagObservationStatus %in% c("T", "X"),
+                                         (flagObservationStatus %in% c("T", "X"))),
                                      .SD[which.min(timePointYears)], by = c("measuredElement", "geographicAreaM49")]
 
         ##' to do : check the merge criteria with a hole imputed time serie ... with Ie present of course!
