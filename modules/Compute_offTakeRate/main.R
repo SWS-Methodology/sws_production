@@ -16,7 +16,7 @@ suppressMessages({
     library(faoswsUtil)
     library(faoswsFlag)
     library(faoswsImputation)
-    library(faoswsProduction)
+    #library(faoswsProduction)
     library(faoswsProcessing)
     library(faoswsEnsure)
     library(magrittr)
@@ -29,14 +29,14 @@ R_SWS_SHARE_PATH <- Sys.getenv("R_SWS_SHARE_PATH")
 
 if (CheckDebug()) {
     
+    # Use package root as working dir
+    invisible(lapply(list.files("R", full.names = TRUE), source))
+    
     library(faoswsModules)
     SETTINGS <- ReadSettings("modules/Compute_offTakeRate/sws.yml")
     
     ## If you're not on the system, your settings will overwrite any others
     R_SWS_SHARE_PATH <- SETTINGS[["share"]]
-    
-    ## Define where your certificates are stored
-    SetClientFiles(SETTINGS[["certdir"]])
     
     ## Get session information from SWS. Token must be obtained from web interface
     
@@ -112,7 +112,7 @@ for (iter in seq(sessionItems)) {
             next
         }
         
-        if (nrow(extractedData[measuredElement %in% formulaTable$productivity & flagObservationStatus %in% "" 
+        if (nrow(extractedData[measuredElement %in% formulaTable$productivity & flagObservationStatus %in% c("", "A") 
                                & flagMethod %in% "q",]) > 0) {
             message("Item : ", currentItem, " has a protected productivity value")
             next
@@ -194,7 +194,8 @@ for (iter in seq(sessionItems)) {
         processedData[feasibleFilter & nonZeroProductionFilter,
                       `:=`(c(formulaParameters$yieldObservationFlag),
                            aggregateObservationFlag(get(formulaParameters$productionObservationFlag),
-                                                    get(formulaParameters$areaHarvestedObservationFlag)))]
+                                                    get(formulaParameters$areaHarvestedObservationFlag)),
+                           flagTable = ReadDatatable("ocs2023_flagweight"))]
         
         
         processedData[feasibleFilter & !nonZeroProductionFilter,
