@@ -13,3 +13,4 @@ sws.yml
 *.sw[a-z]
 
 log.txt
+modules/Compute_offTakeRate/sws.yml
