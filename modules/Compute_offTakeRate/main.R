@@ -194,8 +194,8 @@ for (iter in seq(sessionItems)) {
         processedData[feasibleFilter & nonZeroProductionFilter,
                       `:=`(c(formulaParameters$yieldObservationFlag),
                            aggregateObservationFlag(get(formulaParameters$productionObservationFlag),
-                                                    get(formulaParameters$areaHarvestedObservationFlag)),
-                           flagTable = ReadDatatable("ocs2023_flagweight"))]
+                                                    get(formulaParameters$areaHarvestedObservationFlag),
+                           flagTable = ReadDatatable("ocs2023_flagweight")))]
         
         
         processedData[feasibleFilter & !nonZeroProductionFilter,
