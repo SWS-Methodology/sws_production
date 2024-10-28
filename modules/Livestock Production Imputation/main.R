@@ -696,7 +696,7 @@ for (iter in seq(selectedMeatCode)) {
         ## Imputation of animal Stock
         ## To impute livestock numbers we follow excatly the same approach (the ensemble approach)
         ## already developped. Here we are building the parameters
-        animalStockImputationParameters <- defaultImputationParameters()
+        animalStockImputationParameters <- defaultImputationParameters(flagTable = ReadDatatable("ocs2023_flagweight"))
         
         ## I am modifing the animalStockImputationParameters in order to specify that the variable to be imputed
         ## is the livestock (5111 for big animals, 5112 for small animals)
