@@ -563,7 +563,7 @@ if (nrow(shrink_flag) > 0) {
   data_dcast <- dcast(shrink_flag, geographicAreaM49 + measuredElementSuaFbs + measuredItemFbsSua  ~ timePointYears, 
                       value.var = c("Value"))
   
-  data_dcast <- nameData("suafbs", "sua_balanced", data_dcast)
+  data_dcast <- nameData(key@domain, key@dataset, data_dcast)
   
 }
 
@@ -642,7 +642,7 @@ if (nrow(shrink_flag_last) > 0) {
   data_last_dcast <- dcast(shrink_flag_last, geographicAreaM49 + measuredElementSuaFbs + measuredItemFbsSua  ~ timePointYears, 
                            value.var = c("Value"))
   
-  data_last_dcast <- nameData("suafbs", "sua_balanced", data_last_dcast)
+  data_last_dcast <- nameData(key@domain, key@dataset, data_last_dcast)
   
 }
 
