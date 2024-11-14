@@ -693,10 +693,10 @@ body_message = paste("Plugin completed. Derived Items to check.
                      ",
                      sep='\n')
 
-send_mail(from = "no-reply@fao.org", 
-          to = swsContext.userEmail,
-          subject = paste0("Derived outliers in ", COUNTRY_NAME), 
-          body = c(body_message, tmp_file_derived))
+# send_mail(from = "no-reply@fao.org", 
+#           to = swsContext.userEmail,
+#           subject = paste0("Derived outliers in ", COUNTRY_NAME), 
+#           body = c(body_message, tmp_file_derived))
 
 unlink(TMP_DIR, recursive = TRUE)
 
