@@ -105,6 +105,9 @@ eu_list <- geographic_table[, geographicAreaM49]
 
 ##' Obtain the complete imputation key
 completeImputationKey = getCompleteImputationKey("production")
+completeImputationKey@domain <- sessionKey@domain
+completeImputationKey@dataset <- sessionKey@dataset
+
 
 completeImputationKey@dimensions$timePointYears@keys <-
     as.character(min(completeImputationKey@dimensions$timePointYears@keys):lastYear)
@@ -142,7 +145,7 @@ livestockData=GetData(completeImputationKey)
 ## ---------------------------------------------------------------------
 ##Pull milking animals
 ##Get the milk triplet
-itemMap = GetCodeList(domain = "agriculture", dataset = "aproduction", "measuredItemCPC")
+itemMap = GetCodeList(domain = sessionKey@domain, dataset = sessionKey@dataset, "measuredItemCPC")
 milkItems=itemMap[type=="MILK",code]
 
 ##All the milk items shares the same triplet
@@ -179,7 +182,8 @@ milkingAnimalData=expandYear(milkingAnimalData, newYears=lastYear)
 # if(imputationTimeWindow=="all"){milkingAnimalData=removeNonProtectedFlag(milkingAnimalData)}else{
 #     milkingAnimalData=removeNonProtectedFlag(milkingAnimalData, keepDataUntil = (lastYear-2))}
 
-milkingAnimalData=removeNonProtectedFlag(milkingAnimalData, keepDataUntil = (lastYear - (lastYear - startYear)))
+milkingAnimalData=removeNonProtectedFlag(milkingAnimalData, keepDataUntil = (lastYear - (lastYear - startYear)),
+                                         flagValidTable = ReadDatatable("valid_flags_ocs2023"))
 
 message("Impute milking animals")
 milkingAnimalsDataToModel =rbind(livestockData, milkingAnimalData )
@@ -282,7 +286,8 @@ existingSeries = unique(milkProductionData[,.(geographicAreaM49 , measuredItemCP
 # if(imputationTimeWindow=="all"){milkProductionData=removeNonProtectedFlag(milkProductionData)}else{
 #     milkProductionData=removeNonProtectedFlag(milkProductionData, keepDataUntil = (lastYear-2))}
 
-milkProductionData=removeNonProtectedFlag(milkProductionData, keepDataUntil = (lastYear - (lastYear - startYear)))
+milkProductionData=removeNonProtectedFlag(milkProductionData, keepDataUntil = (lastYear - (lastYear - startYear)),
+                                          flagValidTable = ReadDatatable("valid_flags_ocs2023"))
 
 #milkProductionData= removeNonProtectedFlag(milkProductionData)
 
@@ -346,7 +351,8 @@ milkYieldProductionData=GetData(completeImputationKey)
 # if(imputationTimeWindow=="all"){milkYieldProductionData=removeNonProtectedFlag(milkYieldProductionData)}else{
 #     milkYieldProductionData=removeNonProtectedFlag(milkYieldProductionData, keepDataUntil = (lastYear-2))}
 
-milkYieldProductionData=removeNonProtectedFlag(milkYieldProductionData, keepDataUntil = (lastYear - (lastYear - startYear)))
+milkYieldProductionData=removeNonProtectedFlag(milkYieldProductionData, keepDataUntil = (lastYear - (lastYear - startYear)),
+                                               flagValidTable = ReadDatatable("valid_flags_ocs2023"))
 
 #milkYieldProductionData= removeNonProtectedFlag(milkYieldProductionData)
 
@@ -368,7 +374,8 @@ completeTriplet[milkYieldToBeImputed, Value_measuredElement_5417:=(get(milkFormu
 milkYieldImputedFlags = milkYieldToBeImputed & !is.na(completeTriplet[,get(milkFormulaParameters$yieldValue)])
 
 completeTriplet[milkYieldImputedFlags, flagObservationStatus_measuredElement_5417:=aggregateObservationFlag(get(milkFormulaParameters$productionObservationFlag),
-                                                                                                            get(milkFormulaParameters$areaHarvestedObservationFlag))]
+                                                                                                            get(milkFormulaParameters$areaHarvestedObservationFlag),
+                                                                                                            flagTable = ReadDatatable("ocs2023_flagweight"))]
 
 completeTriplet[milkYieldImputedFlags, flagMethod_measuredElement_5417:=processingParameters$balanceMethodFlag]
 
