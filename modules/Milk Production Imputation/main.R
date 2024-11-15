@@ -46,13 +46,10 @@ R_SWS_SHARE_PATH = Sys.getenv("R_SWS_SHARE_PATH")
 if(CheckDebug()){
 
     library(faoswsModules)
-    SETTINGS = ReadSettings("modules/animal_stockFRANCESCA/sws.yml")
+    SETTINGS = ReadSettings("modules/Milk Production Imputation/sws.yml")
 
     ## If you're not on the system, your settings will overwrite any others
     R_SWS_SHARE_PATH = SETTINGS[["share"]]
-
-    ## Define where your certificates are stored
-    SetClientFiles(SETTINGS[["certdir"]])
 
     ## Get session information from SWS. Token must be obtained from web interface
     GetTestEnvironment(baseUrl = SETTINGS[["server"]],
