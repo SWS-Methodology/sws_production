@@ -41,7 +41,7 @@ R_SWS_SHARE_PATH <- Sys.getenv("R_SWS_SHARE_PATH")
 if (CheckDebug()) {
     R_SWS_SHARE_PATH <- "//hqlprsws1.hq.un.fao.org/sws_r_share"
     
-    mydir <- "modules/production_outlier_official/"
+    mydir <- "modules/production_outlier_protected/"
     
     SETTINGS <- faoswsModules::ReadSettings(file.path(mydir, "sws.yml"))
     
@@ -59,10 +59,12 @@ COUNTRY_NAME <-
         "aproduction", "aproduction",
         data.table(geographicAreaM49 = COUNTRY))$geographicAreaM49_description
 
-USER <- regmatches(
-    swsContext.username,
-    regexpr("(?<=/).+$", swsContext.username, perl = TRUE)
-)
+USER <- if(grepl( '@', swsContext.username, fixed = TRUE) == FALSE){
+    regmatches(swsContext.username,regexpr("(?<=/).+$", swsContext.username, perl = TRUE))}else{
+        
+        regmatches(swsContext.username,regexpr("^([^.])+(?=\\.)", swsContext.username, perl = TRUE))
+    }
+
 
 dbg_print <- function(x) {
     message(paste0("PROD (", COUNTRY, "): ", x))
@@ -100,6 +102,7 @@ TMP_DIR <- file.path(tempdir(), USER)
 if (!file.exists(TMP_DIR)) dir.create(TMP_DIR, recursive = TRUE)
 
 tmp_file_outliers <- file.path(TMP_DIR, paste0("production_outlier_", COUNTRY_NAME, ".xlsx"))
+tmp_file_utilizations <- file.path(TMP_DIR, paste0("missing_utilizations_", COUNTRY_NAME, ".xlsx"))
 
 dbg_print("end parameters")
 
@@ -565,6 +568,8 @@ session_key <- swsContext.datasets[[1]]
 data <- GetData(session_key)
 
 data_backup <- copy(data)
+
+data_utilization <- copy(data)
 
 data <- as.data.table(data)
 
@@ -1189,28 +1194,28 @@ if(nrow(outlier_file) > 0){
 #                                              #
 #                                              #
 ################################################
-
-if(nrow(final_complete_triplet)>0 & nrow(final_partial_triplet)>0){
-    
-    #miss_last_year <- rbind(final_complete_triplet,final_partial_triplet)
-    
-    miss_last_year <- rbind(final_complete_triplet[! final_partial_triplet , on = c("measuredElement","geographicAreaM49",
-                                                                                           "timePointYears", "measuredItemCPC")], final_partial_triplet)
-    #miss_last_year <- unique(miss_last_year)
-
-}else if(nrow(final_complete_triplet)>0 & nrow(final_partial_triplet)==0){
-    
-    miss_last_year <- copy(final_complete_triplet)
-    
-
-}else if(nrow(final_complete_triplet)==0 & nrow(final_partial_triplet)>0){
-    
-    miss_last_year <- copy(final_partial_triplet)
-
-}else{
-    
-    miss_last_year <- data.table()
-}
+#Deleted this part, it was in any case replaced by the data_backup later
+# if(nrow(final_complete_triplet)>0 & nrow(final_partial_triplet)>0){
+#     
+#     #miss_last_year <- rbind(final_complete_triplet,final_partial_triplet)
+#     
+#     miss_last_year <- rbind(final_complete_triplet[! final_partial_triplet , on = c("measuredElement","geographicAreaM49",
+#                                                                                            "timePointYears", "measuredItemCPC")], final_partial_triplet)
+#     #miss_last_year <- unique(miss_last_year)
+# 
+# }else if(nrow(final_complete_triplet)>0 & nrow(final_partial_triplet)==0){
+#     
+#     miss_last_year <- copy(final_complete_triplet)
+#     
+# 
+# }else if(nrow(final_complete_triplet)==0 & nrow(final_partial_triplet)>0){
+#     
+#     miss_last_year <- copy(final_partial_triplet)
+# 
+# }else{
+#     
+#     miss_last_year <- data.table()
+# }
 
 
 miss_last_year <- copy(data_backup)
@@ -1243,7 +1248,7 @@ if(nrow(miss_last_year)>0){
     miss_last_year[, official:= ifelse(flagObservationStatus %in% c("","T") & 
                                            timePointYears %in% as.character((startYear-1) : (endYear-1)),TRUE,FALSE),]
     
-    miss_last_year[, official:= ifelse(sum(official) >1 ,TRUE,FALSE),
+    miss_last_year[, official:= ifelse(sum(official) >=1 ,TRUE,FALSE),
                    by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
     
     
@@ -1416,6 +1421,139 @@ if(nrow(miss_last_year_cast) != 0){
 saveWorkbook(wb, tmp_file_outliers, overwrite = TRUE)
 
 
+################################################
+#                                              #
+#                                              #
+#       MISSING LAST UTILIZATION               #
+#                                              #
+#                                              #
+################################################
+
+miss_last_utilization <- copy(data_utilization)
+
+if(nrow(miss_last_utilization)>0){
+    #remove "5320","5321"
+    utilization_elements <- c("5520","5525","5016","5141","5023","5165")
+    
+    miss_last_utilization <- miss_last_utilization[measuredElement %in% utilization_elements,]
+    
+    miss_last_utilization[,
+                          `:=`(
+                              mean = mean(Value[timePointYears %in% as.character((startYear-1) : (endYear-1))], na.rm = TRUE)
+                          ),
+                          by = c("geographicAreaM49", "measuredItemCPC", "measuredElement")
+                          ]
+    
+    ##I take only data with previous average != na and so with present values
+    miss_last_utilization = miss_last_utilization[!is.na(mean),]
+    
+    
+    
+    miss_last_utilization[, exists:= ifelse(timePointYears %in% as.character(endYear),TRUE,FALSE),
+                          by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
+    
+    miss_last_utilization[, exists:= ifelse(sum(exists) ==1 ,TRUE,FALSE),
+                          by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
+    
+    
+    miss_last_utilization[, official:= ifelse(flagObservationStatus %in% c("","T") & 
+                                                  timePointYears %in% as.character((startYear-1) : (endYear-1)),TRUE,FALSE),]
+    
+    miss_last_utilization[, official:= ifelse(sum(official) >1 ,TRUE,FALSE),
+                          by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
+    
+    
+    miss_last_utilization = miss_last_utilization[exists==FALSE & official == TRUE,]
+    
+    miss_last_utilization[, c("exists", "official","avg", "prev_avg", "mean"):= NULL]
+    
+    
+    miss_last_utilization$Value = format(round(miss_last_utilization$Value, 0),nsmall=0 , big.mark=",",scientific=FALSE)
+    
+    miss_last_utilization$Value<- paste(miss_last_utilization$Value,miss_last_utilization$flagObservationStatus,
+                                        miss_last_utilization$flagMethod)
+    
+    
+    miss_last_utilization <-miss_last_utilization[, c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears","Value"),
+                                                  with= FALSE]
+    
+}else{
+    miss_last_utilization <- data.table()
+}
+
+
+if(nrow(miss_last_utilization) != 0){
+    
+    
+    miss_last_utilization_cast <- dcast(miss_last_utilization, geographicAreaM49 + measuredElement + measuredItemCPC  ~ timePointYears, 
+                                        value.var = "Value")
+    
+    #setnames(miss_last_year_cast,tail(names(miss_last_year_cast), n=1), "")
+    #tail(names(miss_last_year_cast), n=1)
+    #last_year <- as.numeric(tail(names(miss_last_year_cast), n=1))
+    if(tail(names(miss_last_utilization_cast), n=1) == as.character(endYear-1)){
+        
+        #last_year <- paste0("`",endYear-1,"`")
+        #`2019`
+        names(miss_last_utilization_cast)[length(names(miss_last_utilization_cast))]<-"last_year" 
+        
+        miss_last_utilization_cast <- miss_last_utilization_cast[!is.na(last_year),]
+        #select all after first space
+        #sub(".*? ", "", "478,361 p")
+        #get string that contains p
+        #grepl("p", "T p", fixed = TRUE)
+        
+        nso_utilization <- miss_last_utilization_cast[grepl("p", last_year, fixed = T) & !grepl("T", last_year, fixed = T),]
+        
+        tp_utilization <- miss_last_utilization_cast[grepl("p", last_year, fixed = T) & grepl("T", last_year, fixed = T),]
+        
+        semi_official_utilization <- miss_last_utilization_cast[!grepl("p", last_year, fixed = T) & grepl("T", last_year, fixed = T),]
+        
+        others_utilization <- miss_last_utilization_cast[!grepl("p", last_year, fixed = T) & !grepl("T", last_year, fixed = T) &
+                                                             !grepl("q", last_year, fixed = T),]
+        
+        quest_utilization <- miss_last_utilization_cast[grepl("q", last_year, fixed = T),]
+        
+        miss_last_utilization_cast <- rbind(nso_utilization, tp_utilization, semi_official_utilization, others_utilization, quest_utilization)
+        
+        names(miss_last_utilization_cast)[length(names(miss_last_utilization_cast))]<-as.character(endYear-1)
+        
+        miss_last_utilization_cast <- nameData("aproduction", "aproduction", miss_last_utilization_cast)
+        
+    }else if (tail(names(miss_last_utilization_cast), n=1) == as.character(endYear)) {
+        #nel caso in cui l ultimo anno della tabella è l'attuale end year e non endyear -1 segnalare il problem
+        error_message <- "ERROR IN MISSING LAST YEAR EXCEL SHEET. Please check this error"
+        
+    }else{
+        
+        miss_last_utilization_cast <- data.table()
+    }
+}else{
+    
+    miss_last_utilization_cast <- data.table()
+    
+}
+
+
+######################
+#### WB CREATION    ##
+######################
+
+
+wb <- createWorkbook(USER)
+
+if(nrow(miss_last_utilization_cast) != 0){
+    
+    addWorksheet(wb, "Missing_last_utilization")
+    writeDataTable(wb, "Missing_last_utilization",miss_last_utilization_cast)
+    
+}
+
+
+
+saveWorkbook(wb, tmp_file_utilizations, overwrite = TRUE)
+
+
 #if( exists("error_message")){paste(error_message)}
 body_message = paste("Plugin completed. Production outliers official figures.", "",if( exists("error_message")){paste(error_message)},
                      "",
@@ -1424,13 +1562,14 @@ body_message = paste("Plugin completed. Production outliers official figures.", 
                      **********************************************************************************
                      + If red figures are present they indicate quantities > 20,000,000 tons with a */- 20% jump from its past average
                      + If yellow figures are present they may indicate a value > 10,000,000 greater than 2 times its previous average or 
-                     + a value > 1,000 greater than 5 times its previous average",
+                     + a value > 1,000 greater than 5 times its previous average
+                     + check the missing utilization file for missing official/unofficial values in the latest year",
                      sep='\n')
 
 send_mail(from = "no-reply@fao.org", 
           to = swsContext.userEmail,
           subject = paste0("Production outliers in ", COUNTRY_NAME), 
-          body = c(body_message, tmp_file_outliers))
+          body = c(body_message, tmp_file_outliers, tmp_file_utilizations))
 
 unlink(TMP_DIR, recursive = TRUE)
 
