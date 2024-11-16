@@ -45,8 +45,6 @@ if (CheckDebug()) {
     
     SETTINGS <- faoswsModules::ReadSettings(file.path(mydir, "sws.yml"))
     
-    SetClientFiles(SETTINGS[["certdir"]])
-    
     GetTestEnvironment(baseUrl = SETTINGS[["server"]], token = SETTINGS[["token"]])
 }
 
@@ -56,7 +54,7 @@ COUNTRY <- as.character(swsContext.datasets[[1]]@dimensions$geographicAreaM49@ke
 
 COUNTRY_NAME <-
     nameData(
-        "aproduction", "aproduction",
+        swsContext.datasets[[1]]@domain, swsContext.datasets[[1]]@dataset,
         data.table(geographicAreaM49 = COUNTRY))$geographicAreaM49_description
 
 USER <- if(grepl( '@', swsContext.username, fixed = TRUE) == FALSE){
@@ -117,8 +115,8 @@ yield_function <- function(data_table) {
     
     data <- copy(data_table)
     
-    datasetConfig <- GetDatasetConfig(domainCode = "agriculture",
-                                      datasetCode = "aproduction")
+    datasetConfig <- GetDatasetConfig(domainCode = swsContext.datasets[[1]]@domain,
+                                      datasetCode = swsContext.datasets[[1]]@dataset)
     
     processingParameters <-
         productionProcessingParameters(datasetConfig = datasetConfig)
@@ -184,7 +182,7 @@ yield_function <- function(data_table) {
                 next
             }
             
-            if (nrow(extractedData[measuredElement %in% formulaTable$productivity & flagObservationStatus %in% "" 
+            if (nrow(extractedData[measuredElement %in% formulaTable$productivity & flagObservationStatus %in% c("", "A") 
                                    & flagMethod %in% "q",]) > 0) {
                 message("Item : ", currentItem, " has a protected productivity value")
                 next
@@ -230,7 +228,8 @@ yield_function <- function(data_table) {
             
             computed_Data = computeYield(processedData,
                                          processingParameters = processingParameters,
-                                         formulaParameters = formulaParameters)
+                                         formulaParameters = formulaParameters,
+                                         flagTable = ReadDatatable("ocs2023_flagweight"))
             
             
             computed_Data <-
@@ -261,8 +260,8 @@ offtake_function <- function(data_table) {
     
     data <- copy(data_table)
     
-    datasetConfig <- GetDatasetConfig(domainCode = "agriculture",
-                                      datasetCode = "aproduction")
+    datasetConfig <- GetDatasetConfig(domainCode = swsContext.datasets[[1]]@domain,
+                                      datasetCode = swsContext.datasets[[1]]@dataset)
     
     processingParameters <-
         productionProcessingParameters(datasetConfig = datasetConfig)
@@ -320,7 +319,7 @@ offtake_function <- function(data_table) {
                 next
             }
             
-            if (nrow(extractedData[measuredElement %in% formulaTable$productivity & flagObservationStatus %in% "" 
+            if (nrow(extractedData[measuredElement %in% formulaTable$productivity & flagObservationStatus %in% c("", "A") 
                                    & flagMethod %in% "q",]) > 0) {
                 message("Item : ", currentItem, " has a protected productivity value")
                 next
@@ -402,7 +401,8 @@ offtake_function <- function(data_table) {
             processedData[feasibleFilter & nonZeroProductionFilter,
                           `:=`(c(formulaParameters$yieldObservationFlag),
                                aggregateObservationFlag(get(formulaParameters$productionObservationFlag),
-                                                        get(formulaParameters$areaHarvestedObservationFlag)))]
+                                                        get(formulaParameters$areaHarvestedObservationFlag),
+                                                        flagTable = ReadDatatable("ocs2023_flagweight")))]
             
             
             processedData[feasibleFilter & !nonZeroProductionFilter,
@@ -577,7 +577,7 @@ data <- data[measuredElement %in% unique(ELEMENTS),]
 data <- data[measuredItemCPC %in% c(unique(cpc_cluster$cpc), unique(proxy_cluster$cpc_code)),]
 
 # keep only protected data
-data <- data[flagObservationStatus %in% "" | flagObservationStatus %in% "T" | flagMethod %in% "f",]
+data <- data[flagObservationStatus %in% c("", "A") | flagObservationStatus %in% c("T", "X") | flagMethod %in% "f",]
 
 # get free of protected data that are not in the interest range of year (startyear:endyear)
 # this passage is useful to discard the data point that are still in the dataset but they don t have new info from 
@@ -602,7 +602,7 @@ for (i in 1:length(c(combination_of_interest)$measuredItemCPC)){
 
 
 clean_data <- data_of_interest[, checkFlag := ifelse(timePointYears %in% as.character(startYear:endYear) &
-                            flagObservationStatus %!in% c("","T","E"), TRUE,FALSE)]
+                            flagObservationStatus %!in% c("", "A", "T", "X", "E"), TRUE,FALSE)]
 
 
 clean_data <- clean_data[checkFlag == FALSE,]
@@ -1148,7 +1148,7 @@ if(nrow(outlier_file) > 0){
     
     
     
-    outlier_file <- nameData("aproduction", "aproduction", outlier_file, except = "timePointYears")
+    outlier_file <- nameData(swsContext.datasets[[1]]@domain, swsContext.datasets[[1]]@dataset, outlier_file, except = "timePointYears")
     
     outlier_file <- outlier_file[!flagMethod == "c",]
     
@@ -1245,7 +1245,7 @@ if(nrow(miss_last_year)>0){
                    by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
     
     
-    miss_last_year[, official:= ifelse(flagObservationStatus %in% c("","T") & 
+    miss_last_year[, official:= ifelse(flagObservationStatus %in% c("", "A", "T", "X") & 
                                            timePointYears %in% as.character((startYear-1) : (endYear-1)),TRUE,FALSE),]
     
     miss_last_year[, official:= ifelse(sum(official) >=1 ,TRUE,FALSE),
@@ -1329,7 +1329,7 @@ if(nrow(miss_last_year) != 0){
         
         names(miss_last_year_cast)[length(names(miss_last_year_cast))]<-as.character(endYear-1)
         
-        miss_last_year_cast <- nameData("aproduction", "aproduction", miss_last_year_cast)
+        miss_last_year_cast <- nameData(swsContext.datasets[[1]]@domain, swsContext.datasets[[1]]@dataset, miss_last_year_cast)
         
     }else if (tail(names(miss_last_year_cast), n=1) == as.character(endYear)) {
         #nel caso in cui l ultimo anno della tabella è l'attuale end year e non endyear -1 segnalare il problem
@@ -1365,8 +1365,8 @@ productivity_to_save <- as.data.table(productivity_to_save)
 dbg_print("Saving Yield figures")
 
 SaveData(
-    domain = "aproduction",
-    dataset = "aproduction",
+    domain = swsContext.datasets[[1]]@domain,
+    dataset = swsContext.datasets[[1]]@dataset,
     data = productivity_to_save,
     waitTimeout = 20000)
 
@@ -1456,7 +1456,7 @@ if(nrow(miss_last_utilization)>0){
                           by = c("geographicAreaM49","measuredItemCPC","measuredElement")]
     
     
-    miss_last_utilization[, official:= ifelse(flagObservationStatus %in% c("","T") & 
+    miss_last_utilization[, official:= ifelse(flagObservationStatus %in% c("","A","T","X") & 
                                                   timePointYears %in% as.character((startYear-1) : (endYear-1)),TRUE,FALSE),]
     
     miss_last_utilization[, official:= ifelse(sum(official) >1 ,TRUE,FALSE),
@@ -1518,7 +1518,7 @@ if(nrow(miss_last_utilization) != 0){
         
         names(miss_last_utilization_cast)[length(names(miss_last_utilization_cast))]<-as.character(endYear-1)
         
-        miss_last_utilization_cast <- nameData("aproduction", "aproduction", miss_last_utilization_cast)
+        miss_last_utilization_cast <- nameData(swsContext.datasets[[1]]@domain, swsContext.datasets[[1]]@dataset, miss_last_utilization_cast)
         
     }else if (tail(names(miss_last_utilization_cast), n=1) == as.character(endYear)) {
         #nel caso in cui l ultimo anno della tabella è l'attuale end year e non endyear -1 segnalare il problem
