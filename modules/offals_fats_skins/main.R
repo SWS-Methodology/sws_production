@@ -125,8 +125,6 @@ items <- unique(c(meat_table$cpc_meat,offals_fats$cpc_offals_fats,offals_fats$cp
 
 
 
-#pull production data 
-
 prodKey <- DatasetKey(domain = "agriculture", dataset = "aproduction",
                       dimensions = list(
                         geographicAreaM49 = Dimension(name = "geographicAreaM49", keys = COUNTRY),
@@ -137,6 +135,7 @@ prodKey <- DatasetKey(domain = "agriculture", dataset = "aproduction",
 
 
 prodData <- GetData(prodKey)
+
 
 prodFlags <- copy(prodData)
 
@@ -161,6 +160,7 @@ production_data <- copy(prodData)
 
 
 production_data <- subset(production_data, measuredElement == "5510")
+
 
 #remove offals, fats and skin cpcs 
 
@@ -220,6 +220,8 @@ timeseriesProd <-as.data.table(expand.grid(geographicAreaM49 = unique(prodData$g
 
 timeseriesProd <- merge(timeseriesProd, prodData, by =c("geographicAreaM49","measuredElement", "measuredItemCPC","timePointYears"), all.x = TRUE)
 
+# timeseriesProd <- timeseriesProd[, Protected := ifelse(flagObservationStatus %in% c("","T"), TRUE,FALSE)]
+
 prodData <- copy(timeseriesProd)
 
 
@@ -237,7 +239,7 @@ conv_factor[, skin_factor:= `hides_and_skins_content_of_live_weight_perc`/`carca
 offals_fat_factor <- conv_factor[,c("geographic_area_m49", "live_animal", "offal_factor", "fat_factor"),with=FALSE]
 skin_factor <- conv_factor[,c("geographic_area_m49", "live_animal", "skin_factor"),with=FALSE]
 
-#offals and meet 
+#offals and meat 
 
 offals_fat_meat <- copy(offals_fats)
 offals_fat_meat <- subset(offals_fat_meat, offals_fats %in% c("offals","fat"))
@@ -290,11 +292,42 @@ production_offals <- production_offals[!is.na(live_animal)]
 production_fats <- production_fats[!is.na(live_animal)]
 production_skin <- production_skin[!is.na(live_animal)]
 
+###porduction data in SWS
+
+setnames(prodFlags, c("Value","flagObservationStatus","flagMethod"),c("ValueSWS", "FlagSWS","MethodSWS"))
+
+
 
 #offals###############################################################################
 
 production_offals[, offals_production := ifelse(measuredElement == "5510",offal_factor*Value[measuredElement == "5510"],NA),
                   , by= c("geographicAreaM49","live_animal","timePointYears")]
+
+
+production_offals <- merge(production_offals, prodFlags, by.x = c("geographicAreaM49","measuredElement","cpc_offals_fats","timePointYears"),
+                           by.y = c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears"), all.x = TRUE)
+
+
+production_offals[, Protected := ifelse(FlagSWS %in% c("", "T"), TRUE, FALSE)]
+
+production_offals[, offals_production := ifelse(measuredElement == "5510" & Protected == TRUE, ValueSWS, offals_production)]
+
+production_offals[measuredElement == "5510", Flag_prod := ifelse(measuredElement == "5510" & Protected == TRUE , FlagSWS,"I")]
+
+# production_offals[, Flag_prod := ifelse(is.na(offals_production) & measuredElement != "5510", NA, Flag_prod)]
+
+
+production_offals[measuredElement == "5510", method_prod := ifelse(measuredElement == "5510" & Protected == TRUE , MethodSWS,"i" )]
+                                                                  
+
+
+
+# production_offals[, method_prod := ifelse(is.na(offals_production) & measuredElement != "5510", NA, method_prod)]
+
+
+
+# replace the official production
+
 
 
 #1 metric ton = 10^6 grams
@@ -314,7 +347,8 @@ setnames(prod_5320_offals, "cpc_offals_fats","measuredItemCPC")
 
 production_offals <-subset(production_offals, measuredElement == "5510")
 
-production_offals <- production_offals[,c("geographicAreaM49", "timePointYears", "cpc_offals_fats", "offals_production","offals_yield"), with = FALSE]
+production_offals <- production_offals[,c("geographicAreaM49", "timePointYears", "cpc_offals_fats", "offals_production","offals_yield","Flag_prod", "method_prod"), 
+                                       with = FALSE]
 
 
 
@@ -325,6 +359,26 @@ production_offals <- production_offals[,c("geographicAreaM49", "timePointYears",
 
 production_fats[, fat_production := ifelse(measuredElement == "5510",fat_factor*Value[measuredElement == "5510"], NA 
 ), by= c("geographicAreaM49","live_animal","timePointYears")]
+
+
+
+production_fats <- merge(production_fats, prodFlags, by.x = c("geographicAreaM49","measuredElement","cpc_offals_fats","timePointYears"),
+                         by.y = c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears"), all.x = TRUE)
+
+
+production_fats[, Protected := ifelse(FlagSWS %in% c("", "T"), TRUE, FALSE)]
+
+production_fats[, fat_production := ifelse(measuredElement == "5510" & Protected == TRUE, ValueSWS, fat_production)]
+
+production_fats[measuredElement == "5510", Flag_prod := ifelse(measuredElement == "5510" & Protected == TRUE , FlagSWS,
+                                                             "I")]
+
+
+# production_fats[, Flag_prod := ifelse(is.na(fat_production) & measuredElement != "5510", NA, Flag_prod)]
+
+
+production_fats[measuredElement == "5510", method_prod := ifelse(measuredElement == "5510" & Protected == TRUE , MethodSWS, "i")]
+# production_fats[, method_prod := ifelse(is.na(fat_production) & measuredElement != "5510", NA, method_prod)]
 
 
 #1 metric ton = 10^6 grams
@@ -343,7 +397,7 @@ setnames(prod_5320_fats, "cpc_offals_fats","measuredItemCPC")
 
 
 production_fats <-subset(production_fats, measuredElement == "5510")
-production_fats <- production_fats[,c("geographicAreaM49", "timePointYears", "cpc_offals_fats", "fat_production","fat_yield"), with = FALSE]
+production_fats <- production_fats[,c("geographicAreaM49", "timePointYears", "cpc_offals_fats", "fat_production","fat_yield","Flag_prod","method_prod"), with = FALSE]
 
 
 
@@ -352,6 +406,37 @@ production_fats <- production_fats[,c("geographicAreaM49", "timePointYears", "cp
 
 production_skin[, skin_production := ifelse(measuredElement == "5510",skin_factor*Value[measuredElement == "5510"], NA 
 ), by= c("geographicAreaM49","live_animal","timePointYears")]
+
+
+
+
+production_skin <- merge(production_skin, prodFlags, by.x = c("geographicAreaM49","measuredElement","cpc_offals_fats","timePointYears"),
+                         by.y = c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears"), all.x = TRUE)
+
+
+production_skin[, Protected := ifelse(FlagSWS %in% c("", "T"), TRUE, FALSE)]
+
+production_skin[, skin_production := ifelse(measuredElement == "5510" & Protected == TRUE, ValueSWS, skin_production)]
+
+
+production_skin[measuredElement == "5510", Flag_prod := ifelse(measuredElement == "5510" & Protected == TRUE , FlagSWS,"I")]
+
+
+#production_skin[measuredElement == "5510", Flag_prod := ifelse(measuredElement == "5510" & Protected == TRUE , FlagSWS,ifelse(measuredElement == "5510" & flagObservationStatus =="M", "M","I"))]
+
+# production_skin[, Flag_prod := ifelse(measuredElement == "5510" & Protected == TRUE , FlagSWS, "I")]
+
+# production_skin[, Flag_prod := ifelse(is.na(skin_production) & measuredElement != "5510", NA, Flag_prod)]
+
+production_skin[measuredElement == "5510", method_prod := ifelse(measuredElement == "5510" & Protected == TRUE , MethodSWS,"i")]
+
+
+# production_skin[, method_prod := ifelse(measuredElement == "5510" & Protected == TRUE , MethodSWS, "i")]
+
+# production_skin[, method_prod := ifelse(is.na(skin_production) & measuredElement != "5510", NA, method_prod)]
+
+
+
 
 
 #1 metric ton = 10^6 grams
@@ -370,32 +455,81 @@ setnames(prod_5320_skin, "cpc_offals_fats","measuredItemCPC")
 
 
 production_skin <-subset(production_skin, measuredElement == "5510")
-production_skin <- production_skin[,c("geographicAreaM49", "timePointYears", "cpc_offals_fats", "skin_production","skin_yield"), with = FALSE]
+production_skin <- production_skin[,c("geographicAreaM49", "timePointYears", "cpc_offals_fats", "skin_production","skin_yield", "Flag_prod","method_prod"), with = FALSE]
 
 
 
 
+############################      Melting data sets of fats and offals    ##
+#Offals - production
+production_offals_1 <- production_offals[,c("geographicAreaM49","timePointYears","cpc_offals_fats","offals_production","Flag_prod","method_prod"),with = F]
+
+production_offals_1[, measuredElement := "5510"]
+
+setnames(production_offals_1,c("cpc_offals_fats","offals_production","Flag_prod","method_prod"),c("measuredItemCPC","Value","flagObservationStatus","flagMethod"))
+
+#yield   
+production_offals_2 <- production_offals[,c("geographicAreaM49","timePointYears","cpc_offals_fats","offals_yield"),with = F]
+
+production_offals_2[, measuredElement := "5424"]
 
 
+setnames(production_offals_2,c("cpc_offals_fats","offals_yield"),c("measuredItemCPC","Value"))
+
+production_offals_2[, flagObservationStatus := "I"]
+production_offals_2[, flagMethod := "i"]
+
+production_offals <- rbind(production_offals_1,production_offals_2)
+
+###fats - production
 
 
+production_fats_1 <- production_fats[,c("geographicAreaM49","timePointYears","cpc_offals_fats","fat_production","Flag_prod","method_prod"),with = F]
+
+production_fats_1[, measuredElement := "5510"]
+
+setnames(production_fats_1,c("cpc_offals_fats","fat_production","Flag_prod","method_prod"),c("measuredItemCPC","Value","flagObservationStatus","flagMethod"))
+
+#yield   
+production_fats_2 <- production_fats[,c("geographicAreaM49","timePointYears","cpc_offals_fats","fat_yield"),with = F]
+
+production_fats_2[, measuredElement := "5424"]
 
 
-############################Melting data sets of fats and offals
+setnames(production_fats_2,c("cpc_offals_fats","fat_yield"),c("measuredItemCPC","Value"))
 
-production_offals <- melt.data.table(production_offals, id=c("geographicAreaM49","cpc_offals_fats","timePointYears"), na.rm = TRUE)
-production_fats <- melt.data.table(production_fats, id=c("geographicAreaM49","cpc_offals_fats","timePointYears"), na.rm = TRUE)
-production_skin <- melt.data.table(production_skin, id=c("geographicAreaM49","cpc_offals_fats","timePointYears"), na.rm = TRUE)
+production_fats_2[, flagObservationStatus := "I"]
+production_fats_2[, flagMethod := "i"]
+
+production_fats <- rbind(production_fats_1,production_fats_2)
+
+
+##skin - production
+
+
+production_skin_1 <- production_skin[,c("geographicAreaM49","timePointYears","cpc_offals_fats","skin_production","Flag_prod","method_prod"),with = F]
+
+production_skin_1[, measuredElement := "5510"]
+
+setnames(production_skin_1,c("cpc_offals_fats","skin_production","Flag_prod","method_prod"),c("measuredItemCPC","Value","flagObservationStatus","flagMethod"))
+
+#yield   
+production_skin_2 <- production_skin[,c("geographicAreaM49","timePointYears","cpc_offals_fats","skin_yield"),with = F]
+
+production_skin_2[, measuredElement := "5424"]
+
+
+setnames(production_skin_2,c("cpc_offals_fats","skin_yield"),c("measuredItemCPC","Value"))
+
+production_skin_2[, flagObservationStatus := "I"]
+production_skin_2[, flagMethod := "i"]
+
+production_skin <- rbind(production_skin_1,production_skin_2)
+
 
 ##rbind estimated data
 
 prod_fat_offals_skin <- rbind(production_offals,production_fats,production_skin)
-
-prod_fat_offals_skin[, variable := ifelse(variable %in% c( "offals_production", "fat_production", "skin_production"), "5510", "5424")]
-
-prod_fat_offals_skin[, `:=` (flagObservationStatus = "I", flagMethod = "i")]
-
-setnames(prod_fat_offals_skin, c("cpc_offals_fats", "variable", "value"),c("measuredItemCPC","measuredElement","Value"))
 
 
 #rbind the element 5320
@@ -406,9 +540,7 @@ prod_fat_offals_skin <- prod_fat_offals_skin[!is.na(Value)]
 
 
 
-###porduction data in SWS
 
-setnames(prodFlags, c("Value","flagObservationStatus","flagMethod"),c("ValueSWS", "FlagSWS","MethodSWS"))
 
 
 
@@ -423,17 +555,84 @@ prod_fat_offals_skin[, flagObservationStatus := ifelse(measuredElement == "5510"
 prod_fat_offals_skin[, flagMethod := ifelse(measuredElement == "5510" & FlagSWS == "M" &  !is.na(FlagSWS) & !is.na(MethodSWS) & MethodSWS == "-", MethodSWS, flagMethod)]
 
 
+
+
+
 prod_fat_offals_skin[,c("ValueSWS","FlagSWS","MethodSWS") := NULL]
+
+
+prod_fat_offals_skin[measuredElement == "5510" & Value == 0 & flagObservationStatus == "I" & flagMethod == "i",
+                     `:=` (flagObservationStatus= "M", flagMethod = "-")]
+
 
 prod_fat_offals_skin <- prod_fat_offals_skin[!is.na(Value)]
 
-#remove rows with official flag 
+
+# adjustment of the yield flag 
+
+prod_fat_offals_skin[, prod_PRO := ifelse(flagObservationStatus[measuredElement == 5510] %in% c(""), TRUE,FALSE), by=c("geographicAreaM49","measuredItemCPC", "timePointYears")]
 
 
 
+prod_fat_offals_skin[, prod_5320 := ifelse(flagObservationStatus[measuredElement == 5320]  %in% c(""), TRUE,FALSE), by=c("geographicAreaM49","measuredItemCPC", "timePointYears")]
+
+
+
+prod_fat_offals_skin[measuredElement == "5424" , flagObservationStatus := ifelse(prod_PRO == T & prod_5320 == T, "", flagObservationStatus ),by=c("geographicAreaM49","measuredItemCPC", "timePointYears") ]
+
+
+prod_fat_offals_skin[,c("prod_PRO","prod_5320") := NULL]    
+
+
+# we have to delete existing time series that is not computed by the plugin except poultry
+
+prodFlags <- prodFlags[measuredItemCPC %in% unique(offals_fats$cpc_offals_fats)]
+
+deleted_items_to_bind <- merge(prodFlags, prod_fat_offals_skin, by = 
+                                 c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears"), all.x = TRUE)
+
+
+deleted_items_to_bind[, to_be_bined := ifelse(is.na(Value) & !FlagSWS %in% c("","T") , T, F)]
+
+deleted_items_to_bind <- deleted_items_to_bind[to_be_bined == "TRUE"]
+
+
+#remove poutly geese, duck , chicken and turkey since they are considered as derived commodities 
+deleted_items_to_bind <- deleted_items_to_bind[!measuredItemCPC %in% c("21160.01","21160.02","21160.03","21160.04")]
+
+
+deleted_items_to_bind [,c("ValueSWS","FlagSWS","MethodSWS","to_be_bined"):= NULL]
+
+#binding yield
+
+yield_time_series <-as.data.table(expand.grid(geographicAreaM49 = unique(deleted_items_to_bind$geographicAreaM49),
+                                           measuredElement = unique("5424"), measuredItemCPC = unique(deleted_items_to_bind$measuredItemCPC),
+                                           timePointYears = unique(deleted_items_to_bind$timePointYears)))
+
+yield_time_series[, Value := NA_real_]
+
+yield_time_series[,flagObservationStatus := NA_character_ ]
+yield_time_series[,flagMethod := NA_character_ ]
+
+deleted_items_to_bind <- rbind(deleted_items_to_bind, yield_time_series)
+
+
+#bind to the main dataset to be saved in SWS
+
+
+prod_fat_offals_skin <- rbind(prod_fat_offals_skin, deleted_items_to_bind)
+
+#formating columns before saving 
+columns <- c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears")
+
+prod_fat_offals_skin[, (columns) := lapply(.SD, as.character), .SDcols = columns]
+
+
+#to check duplicates
+#prod_fat_offals_skin[duplicated(prod_fat_offals_skin[,c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears"),with = F])]
 
 SaveData(domain = "agriculture",
          dataset = "aproduction",
-         data =  prod_fat_offals_skin,waitTimeout = 1800)
+         data =  prod_fat_offals_skin,waitTimeout = 1800) 
 
 paste0("The plugin ran successfully ! ")
