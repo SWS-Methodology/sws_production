@@ -19,7 +19,7 @@ if(CheckDebug()){
   
   R_SWS_SHARE_PATH <- SETT[["share"]]  
   ## Get SWS Parameters
-  SetClientFiles(dir = SETT[["certdir"]])
+  # SetClientFiles(dir = SETT[["certdir"]])
   GetTestEnvironment(
     baseUrl = SETT[["server"]],
     token = SETT[["token"]]
@@ -29,7 +29,7 @@ if(CheckDebug()){
 
 sessionKey = swsContext.datasets[[1]]
 
-geoKeys = GetCodeList(domain = "agriculture", dataset = "aproduction",
+geoKeys = GetCodeList(domain = sessionKey@domain, dataset = sessionKey@dataset,
                       dimension = "geographicAreaM49")[type == "country", code]
 
 
@@ -115,7 +115,7 @@ meat_table <- ReadDatatable("meat")[,-c("live_animal", "meat"),with = F]
 #offals and fats
 
 offals_fats <- ReadDatatable("offals_fats")[,-c("meat"),with =FALSE]
-offals_fats <-offals_fats[cpc_meat != ""]
+offals_fats <-offals_fats[!(cpc_meat %in% c("", "A"))]
 setnames(offals_fats, "cpc","cpc_offals_fats")
 
 
@@ -124,8 +124,13 @@ setnames(offals_fats, "cpc","cpc_offals_fats")
 items <- unique(c(meat_table$cpc_meat,offals_fats$cpc_offals_fats,offals_fats$cpc_meat))
 
 
+# removing NA's -----------------------------------------------------------
 
-prodKey <- DatasetKey(domain = "agriculture", dataset = "aproduction",
+
+items = items[!is.na(items)]
+
+
+prodKey <- DatasetKey(domain = sessionKey@domain, dataset = sessionKey@dataset,
                       dimensions = list(
                         geographicAreaM49 = Dimension(name = "geographicAreaM49", keys = COUNTRY),
                         measuredElement = Dimension(name = "measuredElement", keys = c("5510","5320")),
@@ -308,7 +313,7 @@ production_offals <- merge(production_offals, prodFlags, by.x = c("geographicAre
                            by.y = c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears"), all.x = TRUE)
 
 
-production_offals[, Protected := ifelse(FlagSWS %in% c("", "T"), TRUE, FALSE)]
+production_offals[, Protected := ifelse(FlagSWS %in% c("", "T", "A", "X"), TRUE, FALSE)]
 
 production_offals[, offals_production := ifelse(measuredElement == "5510" & Protected == TRUE, ValueSWS, offals_production)]
 
@@ -366,7 +371,7 @@ production_fats <- merge(production_fats, prodFlags, by.x = c("geographicAreaM49
                          by.y = c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears"), all.x = TRUE)
 
 
-production_fats[, Protected := ifelse(FlagSWS %in% c("", "T"), TRUE, FALSE)]
+production_fats[, Protected := ifelse(FlagSWS %in% c("", "A", "T", "X"), TRUE, FALSE)]
 
 production_fats[, fat_production := ifelse(measuredElement == "5510" & Protected == TRUE, ValueSWS, fat_production)]
 
@@ -414,7 +419,7 @@ production_skin <- merge(production_skin, prodFlags, by.x = c("geographicAreaM49
                          by.y = c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears"), all.x = TRUE)
 
 
-production_skin[, Protected := ifelse(FlagSWS %in% c("", "T"), TRUE, FALSE)]
+production_skin[, Protected := ifelse(FlagSWS %in% c("", "A", "X", "T"), TRUE, FALSE)]
 
 production_skin[, skin_production := ifelse(measuredElement == "5510" & Protected == TRUE, ValueSWS, skin_production)]
 
@@ -570,15 +575,15 @@ prod_fat_offals_skin <- prod_fat_offals_skin[!is.na(Value)]
 
 # adjustment of the yield flag 
 
-prod_fat_offals_skin[, prod_PRO := ifelse(flagObservationStatus[measuredElement == 5510] %in% c(""), TRUE,FALSE), by=c("geographicAreaM49","measuredItemCPC", "timePointYears")]
+prod_fat_offals_skin[, prod_PRO := ifelse(flagObservationStatus[measuredElement == 5510] %in% c("", "A"), TRUE,FALSE), by=c("geographicAreaM49","measuredItemCPC", "timePointYears")]
 
 
 
-prod_fat_offals_skin[, prod_5320 := ifelse(flagObservationStatus[measuredElement == 5320]  %in% c(""), TRUE,FALSE), by=c("geographicAreaM49","measuredItemCPC", "timePointYears")]
+prod_fat_offals_skin[, prod_5320 := ifelse(flagObservationStatus[measuredElement == 5320]  %in% c("", "A"), TRUE,FALSE), by=c("geographicAreaM49","measuredItemCPC", "timePointYears")]
 
 
 
-prod_fat_offals_skin[measuredElement == "5424" , flagObservationStatus := ifelse(prod_PRO == T & prod_5320 == T, "", flagObservationStatus ),by=c("geographicAreaM49","measuredItemCPC", "timePointYears") ]
+prod_fat_offals_skin[measuredElement == "5424" , flagObservationStatus := ifelse(prod_PRO %in% c("T", "X") & prod_5320 %in% c("T", "X"), "A", flagObservationStatus ),by=c("geographicAreaM49","measuredItemCPC", "timePointYears") ]
 
 
 prod_fat_offals_skin[,c("prod_PRO","prod_5320") := NULL]    
@@ -592,7 +597,7 @@ deleted_items_to_bind <- merge(prodFlags, prod_fat_offals_skin, by =
                                  c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears"), all.x = TRUE)
 
 
-deleted_items_to_bind[, to_be_bined := ifelse(is.na(Value) & !FlagSWS %in% c("","T") , T, F)]
+deleted_items_to_bind[, to_be_bined := ifelse(is.na(Value) & !FlagSWS %in% c("", "A", "T", "X") , T, F)]
 
 deleted_items_to_bind <- deleted_items_to_bind[to_be_bined == "TRUE"]
 
@@ -631,8 +636,8 @@ prod_fat_offals_skin[, (columns) := lapply(.SD, as.character), .SDcols = columns
 #to check duplicates
 #prod_fat_offals_skin[duplicated(prod_fat_offals_skin[,c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears"),with = F])]
 
-SaveData(domain = "agriculture",
-         dataset = "aproduction",
+SaveData(domain = sessionKey@domain,
+         dataset = sessionKey@dataset,
          data =  prod_fat_offals_skin,waitTimeout = 1800) 
 
 paste0("The plugin ran successfully ! ")
