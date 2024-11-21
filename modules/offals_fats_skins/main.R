@@ -631,8 +631,9 @@ prod_fat_offals_skin <- rbind(prod_fat_offals_skin, deleted_items_to_bind)
 columns <- c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears")
 
 prod_fat_offals_skin[, (columns) := lapply(.SD, as.character), .SDcols = columns]
+prod_fat_offals_skin <- na.omit(prod_fat_offals_skin)
 
-
+# write.csv(prod_fat_offals_skin, file = "sandbox/ocs_modified.csv", row.names = FALSE)
 #to check duplicates
 #prod_fat_offals_skin[duplicated(prod_fat_offals_skin[,c("geographicAreaM49","measuredElement","measuredItemCPC","timePointYears"),with = F])]
 
