@@ -46,7 +46,7 @@ R_SWS_SHARE_PATH = Sys.getenv("R_SWS_SHARE_PATH")
 if(CheckDebug()){
 
     library(faoswsModules)
-    SETTINGS = ReadSettings("modules/animal_stockFRANCESCA/sws.yml")
+    SETTINGS = ReadSettings("modules/Milk Production Imputation/sws.yml")
 
     ## If you're not on the system, your settings will overwrite any others
     R_SWS_SHARE_PATH = SETTINGS[["share"]]
@@ -106,6 +106,9 @@ eu_list <- geographic_table[, geographicAreaM49]
 ##' Obtain the complete imputation key
 completeImputationKey = getCompleteImputationKey("production")
 
+completeImputationKey@domain = sessionKey@domain
+completeImputationKey@dataset = sessionKey@dataset
+
 completeImputationKey@dimensions$timePointYears@keys <-
     as.character(min(completeImputationKey@dimensions$timePointYears@keys):lastYear)
 
@@ -142,7 +145,7 @@ livestockData=GetData(completeImputationKey)
 ## ---------------------------------------------------------------------
 ##Pull milking animals
 ##Get the milk triplet
-itemMap = GetCodeList(domain = "agriculture", dataset = "aproduction", "measuredItemCPC")
+itemMap = GetCodeList(domain = sessionKey@domain, dataset = sessionKey@dataset, "measuredItemCPC")
 milkItems=itemMap[type=="MILK",code]
 
 ##All the milk items shares the same triplet
