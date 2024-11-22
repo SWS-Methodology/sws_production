@@ -33,7 +33,7 @@ if(CheckDebug()){
   
   #R_SWS_SHARE_PATH <- SETT[["share"]]  
   ## Get SWS Parameters
-  SetClientFiles(dir = SETT[["certdir"]])
+  # SetClientFiles(dir = SETT[["certdir"]])
   GetTestEnvironment(
     baseUrl = SETT[["server"]],
     token = SETT[["token"]]
@@ -52,7 +52,7 @@ sessionKey = swsContext.datasets[[1]]
 sessionCountries =
   getQueryKey("geographicAreaM49", sessionKey)
 
-geoKeys = GetCodeList(domain = "agriculture", dataset = "aproduction",
+geoKeys = GetCodeList(domain = sessionKey@domain, dataset = sessionKey@dataset,
                       dimension = "geographicAreaM49")[type == "country", code]
 
 ##' Select the countries based on the user input parameter
@@ -73,7 +73,7 @@ geoDim = Dimension(name = "geographicAreaM49", keys = selectedGEOCode)
 eleDim <- Dimension(name = "measuredElement", keys = c("5315", "5316","5417", "5424","54170","54240", "55100","5510"))
 
 
-itemKeys = GetCodeList(domain = "agriculture", dataset = "aproduction", "measuredItemCPC")
+itemKeys = GetCodeList(domain = sessionKey@domain, dataset = sessionKey@dataset, "measuredItemCPC")
 itemKeys = itemKeys[, code]
 
 itemDim <- Dimension(name = "measuredItemCPC", keys = itemKeys)
@@ -81,7 +81,7 @@ itemDim <- Dimension(name = "measuredItemCPC", keys = itemKeys)
 
 timeDim = Dimension(name = "timePointYears", keys = as.character(yearVals))
 
-agKey = DatasetKey(domain = "agriculture", dataset = "aproduction",
+agKey = DatasetKey(domain = sessionKey@domain, dataset = sessionKey@dataset,
                    dimensions = list(
                      geographicAreaM49 = geoDim,
                      measuredElement = eleDim,
@@ -121,7 +121,7 @@ MeatData <- agData[measuredElement %in% c("5417", "5424","54170","54240", "55100
 
 
 # give labels
-ProductionData <-nameData("agriculture", "aproduction", ProductionData)
+ProductionData <-nameData(sessionKey@domain, sessionKey@dataset, ProductionData)
 TradeData<- nameData("trade", "total_trade_cpc_m49", TradeData)
 
 
@@ -432,9 +432,9 @@ setDT(meat_toupload_FINAL)[, ("geographicAreaM49") := lapply(.SD, as.character),
 
 setDT(meat_toupload_FINAL)[, ("Value") := lapply(.SD, as.numeric), .SDcols = "Value"]
 
-
 meat_toupload_FINAL[flagObservationStatus %in% "M" & flagMethod %in% "c", flagMethod := "u"]
 
-SaveData(domain = "agriculture", dataset = "aproduction", data= meat_toupload_FINAL)
+
+SaveData(domain = sessionKey@domain, dataset = sessionKey@dataset, data= meat_toupload_FINAL, waitTimeout = 2000000)
 
 print("Plug in completed")
