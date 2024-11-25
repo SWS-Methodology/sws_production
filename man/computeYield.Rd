@@ -4,8 +4,12 @@
 \alias{computeYield}
 \title{Function to compute and update yield}
 \usage{
-computeYield(data, processingParameters, formulaParameters,
-  flagTable = faoswsFlagTable)
+computeYield(
+  data,
+  processingParameters,
+  formulaParameters,
+  flagTable = faoswsFlagTable
+)
 }
 \arguments{
 \item{data}{The data.table object containing the data.}
@@ -25,4 +29,3 @@ The updated data.table.
 \description{
 Function to compute and update yield
 }
-

@@ -5,8 +5,11 @@
 \title{This function retrieves the mapping between the parent (animal
 such as cattle) and child (meat such as meat of cattle).}
 \usage{
-getAnimalMeatMapping(R_SWS_SHARE_PATH, onlyMeatChildren = FALSE,
-  meatPattern = "^211(1|2|7).*")
+getAnimalMeatMapping(
+  R_SWS_SHARE_PATH,
+  onlyMeatChildren = FALSE,
+  meatPattern = "^211(1|2|7).*"
+)
 }
 \arguments{
 \item{R_SWS_SHARE_PATH}{The path to the shared drive on the SWS.}
@@ -22,4 +25,3 @@ The mapping table
 This function retrieves the mapping between the parent (animal
 such as cattle) and child (meat such as meat of cattle).
 }
-

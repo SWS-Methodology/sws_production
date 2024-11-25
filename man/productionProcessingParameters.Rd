@@ -4,12 +4,21 @@
 \alias{productionProcessingParameters}
 \title{Default Processing Parameters}
 \usage{
-productionProcessingParameters(datasetConfig, dataset = "aproduction",
-  removePriorImputation = FALSE, removeManualEstimation = FALSE,
-  keepOnlyProtected = TRUE, imputationObservationFlag = "I",
-  imputationMethodFlag = "e", balanceMethodFlag = "i",
-  manualEstimationObservationFlag = "E", manualEstimationMethodFlag = "f",
-  missingValueObservationFlag = "M", missingValueMethodFlag = "u")
+productionProcessingParameters(
+  datasetConfig,
+  dataset = "aproduction",
+  removePriorImputation = FALSE,
+  removeManualEstimation = FALSE,
+  keepOnlyProtected = TRUE,
+  convertOCS2023Flags = TRUE,
+  imputationObservationFlag = "I",
+  imputationMethodFlag = "e",
+  balanceMethodFlag = "i",
+  manualEstimationObservationFlag = "E",
+  manualEstimationMethodFlag = "f",
+  missingValueObservationFlag = "M",
+  missingValueMethodFlag = "u"
+)
 }
 \arguments{
 \item{datasetConfig}{The dataset configuration returned by the function
@@ -22,6 +31,9 @@ should be removed.}
 
 \item{removeManualEstimation}{logical, whether previous manual estimation
 should be removed.}
+
+\item{convertOCS2023Flags}{Automatically convert observation status flags 
+(blank) to A and T to X}
 
 \item{imputationObservationFlag}{The observation flag that represents
 imputation.}
@@ -75,4 +87,3 @@ Below is a description of the parameters: \itemize{
 \item missingValueMethodFlag: The method flag corresponding to missing values.
 }
 }
-

@@ -27,4 +27,3 @@ Currently it returns the passed data.table after performing some
 This is a wrapper for all the data manipulation steps before the preparation
 of the imputation.
 }
-

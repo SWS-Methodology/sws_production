@@ -47,4 +47,3 @@ database.  One main purpose of this data is to train machine learning
 algorithms on invalid observations, and use those models to attempt to
 detect invalid observations in the current data.
 }
-

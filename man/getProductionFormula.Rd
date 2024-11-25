@@ -25,4 +25,3 @@ This function provides the element codes (for production, yield, and output)
 and conversion factor which correspond to the particular item code of
 interest.
 }
-
