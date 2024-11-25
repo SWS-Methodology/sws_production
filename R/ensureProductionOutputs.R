@@ -12,6 +12,8 @@
 ##' @param testCalculated logical, whether to test calculated result.
 ##' @param domain The domain to be saved back
 ##' @param dataset The dataset to be saved back
+##' @param flagValidTable Datatable of valid flags. The default is a legacy version but the table
+##'   "valid_flags_ocs2023" should be used instead
 ##' @param returnData logical, whether the data should be returned
 ##' @param normalised logical, whether the data is normalised
 ##'
@@ -27,8 +29,10 @@ ensureProductionOutputs = function(data,
                                    testCalculated = FALSE,
                                    domain = "agriculture",
                                    dataset = "aproduction",
+                                   flagValidTable = ReadDatatable("valid_flags"),
                                    returnData = TRUE,
                                    normalised = TRUE){
+
     dataCopy = copy(data)
 
     if(normalised){
@@ -104,7 +108,7 @@ ensureProductionOutputs = function(data,
 
                  ## Ensure flags are valid
                  ensureFlagValidity(data = dataCopy,
-                                    normalised = FALSE)
+                                    normalised = FALSE,flagTable = flagValidTable)
 
                  ## Ensure production is balanced
                  ##

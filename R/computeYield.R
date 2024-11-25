@@ -4,7 +4,8 @@
 ##' @param processingParameters A list of the parameters for the production
 ##'   processing algorithms.  See defaultProductionParameters() for a starting
 ##'   point.
-##' @param flagTable see data(faoswsFlagTable) in \pkg{faoswsFlag}
+##' @param flagTable see data(faoswsFlagTable) in \pkg{faoswsFlag}. Please use
+##'   ReadDatatable("ocs2023_flagweight") for all future code.
 ##' @param formulaParameters A list holding the names and parmater of formulas.
 ##'     See \code{productionFormulaParameters}.
 ##'

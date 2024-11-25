@@ -5,6 +5,9 @@
 ##' algorithms on invalid observations, and use those models to attempt to
 ##' detect invalid observations in the current data.
 ##' 
+##' @param domain Domain from which to pull history
+##' @param dataset Dataset from which to pull history
+##' 
 ##' @return A data.table object with the following columns:
 ##' \itemize{
 ##'     \item geographicAreaM49: The code for the country of this observation.
@@ -42,32 +45,32 @@
 ##' @export
 ##' 
 
-getAllHistory = function(){
+getAllHistory = function(domain = "agriculture", dataset = "aproduction"){
 
     allCountries =
-        GetCodeList(domain = "agriculture",
-                    dataset = "aproduction",
+        GetCodeList(domain = domain,
+                    dataset = dataset,
                     dimension = "geographicAreaM49")[type == "country", code]
 
     ## Lets just test on subtree
     allItems =
-        adjacent2edge(GetCodeTree(domain = "agriculture",
-                                  dataset = "aproduction",
+        adjacent2edge(GetCodeTree(domain = domain,
+                                  dataset = dataset,
                                   dimension = "measuredItemCPC",
                                   roots = "01"))$children
 
     ## Only data after 1990 has history
     allYears =
-        GetCodeList(domain = "agriculture",
-                    dataset = "aproduction",
+        GetCodeList(domain = domain,
+                    dataset = dataset,
                     dimension = "timePointYears")[description != "wildcard" ,code]
     allYears = as.numeric(allYears)
     allYears = allYears[allYears >= 1990]
     
     ## Create the new expanded keys
     newKey = DatasetKey(
-        domain = "agriculture",
-        dataset = "aproduction",
+        domain = domain,
+        dataset = dataset,
         dimensions = list(
             Dimension(name = "geographicAreaM49",
                       keys = allCountries),

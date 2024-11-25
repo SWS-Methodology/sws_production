@@ -1,29 +1,30 @@
 ##' This function imputes the whole production domain.
 ##'
-##' The function will impute production, area harvested and yield at the same
-##' time.
+##' The function will impute production, area harvested and yield at the same time.
 ##'
-##' Transformation in the yield formula is not allowed and will not be taken
-##' into account.
+##' Transformation in the yield formula is not allowed and will not be taken into account.
 ##'
 ##' @param data The data
-##' @param processingParameters A list of the parameters for the production
-##'     processing algorithms. See defaultProductionParameters() for a starting
-##'     point.
-##' @param formulaParameters A list holding the names and parmater of formulas.
-##'     See \code{productionFormulaParameters}.
+##' @param processingParameters A list of the parameters for the production processing algorithms.
+##'   See defaultProductionParameters() for a starting point.
+##' @param formulaParameters A list holding the names and parmater of formulas. See
+##'   \code{productionFormulaParameters}.
 ##' @param imputationParameters A list holding the imputation parameters, see
-##'     \code{getImputationParameters}.
+##'   \code{getImputationParameters}.
+##' @param flagTable flag weight table to pass to computeYield. Please use
+##'   ReadDatatable("ocs2023_flagweight") for all future code.
 ##' @export
 ##'
 ##' @import faoswsImputation
 ##' @import data.table
-##'
+##' 
 
 imputeProductionTriplet = function(data,
                                   processingParameters,
                                   formulaParameters,
-                                  imputationParameters, ...){
+                                  imputationParameters, 
+                                  flagTable = ReadDatatable("flag_weight_table"),
+                                  ...){
 
     originDataType = sapply(data, FUN = typeof)
 
@@ -198,7 +199,7 @@ imputeProductionTriplet = function(data,
 
     dataCopy = computeYield(dataCopy,
                             processingParameters = processingParameters,
-                            formulaParameters = formulaParameters)
+                            formulaParameters = formulaParameters,flagTable = flagTable)
     ## Check whether all values are missing
     allYieldMissing = all(is.na(dataCopy[[formulaParameters$yieldValue]]))
     allProductionMissing = all(is.na(dataCopy[[formulaParameters$productionValue]]))
@@ -249,7 +250,7 @@ imputeProductionTriplet = function(data,
         dataCopy =
             balanceProduction(data = dataCopy,
                               processingParameters = processingParameters,
-                              formulaParameters = formulaParameters)
+                              formulaParameters = formulaParameters,flagTable = flagTable)
 
         ## NOTE (Michael): Check again whether production is available
         ##                 now after it is balanced.
@@ -296,7 +297,7 @@ imputeProductionTriplet = function(data,
     dataCopy =
         balanceAreaHarvested(data = dataCopy,
                              processingParameters = processingParameters,
-                             formulaParameters = formulaParameters)
+                             formulaParameters = formulaParameters,flagTable = flagTable)
     allAreaMissing = all(is.na(dataCopy[[formulaParameters$areaHarvestedValue]]))
 
     if(!all(allAreaMissing)){
@@ -342,7 +343,7 @@ imputeProductionTriplet = function(data,
         dataCopy =
             computeYield(dataCopy,
                          processingParameters = processingParameters,
-                         formulaParameters = formulaParameters)
+                         formulaParameters = formulaParameters,flagTable = flagTable)
         dataCopy = imputeVariable(data = dataCopy,
                        imputationParameters = yieldImputationParameters)
 

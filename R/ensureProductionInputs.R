@@ -3,11 +3,12 @@
 ##' This function is designed to ensure that the provided dataset is valid.
 ##'
 ##' @param data A data.table containing the data.
-##' @param processingParameters A list containing the parameters to be used in
-##' the processing algorithms.  See ?defaultProcessingParameters for a starting
-##' point.
-##' @param formulaParameters A list holding the names and parmater of formulas.
-##'     See \code{productionFormulaParameters}.
+##' @param processingParameters A list containing the parameters to be used in the processing
+##'   algorithms.  See ?defaultProcessingParameters for a starting point.
+##' @param formulaParameters A list holding the names and parmater of formulas. See
+##'   \code{productionFormulaParameters}.
+##' @param flagValidTable Datatable of valid flags. The default is a legacy version but the table
+##'   "valid_flags_ocs2023" should be used instead
 ##' @param returnData logical, whether the data should be returned
 ##' @param normalised logical, whether the data is normalised
 ##'
@@ -20,6 +21,7 @@
 ensureProductionInputs = function(data,
                                   processingParameters,
                                   formulaParameters,
+                                  flagValidTable = ReadDatatable("valid_flags"),
                                   returnData = TRUE,
                                   normalised = TRUE){
 
@@ -117,7 +119,7 @@ ensureProductionInputs = function(data,
 
     ## Ensure flags are valid
     dataCopy=ensureFlagValidity(data = dataCopy,
-                                normalised = FALSE)
+                                normalised = FALSE, flagTable = flagValidTable)
     
     if(normalised){
         dataCopy = normalise(dataCopy)
