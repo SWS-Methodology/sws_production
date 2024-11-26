@@ -4,7 +4,12 @@
 \alias{balanceAreaHarvested}
 \title{Function to compute area harvested when new production and yield are given.}
 \usage{
-balanceAreaHarvested(data, processingParameters, formulaParameters)
+balanceAreaHarvested(
+  data,
+  processingParameters,
+  formulaParameters,
+  flagTable = ReadDatatable("flag_weight_table")
+)
 }
 \arguments{
 \item{data}{The data.table object containing the data.}
@@ -15,6 +20,10 @@ starting point.}
 
 \item{formulaParameters}{A list holding the names and parmater of formulas.
 See \code{productionFormulaParameters}.}
+
+\item{flagTable}{Flag weight table. Uses an obsolete one
+("flag_weight_table") by default for compatibility but should use
+("ocs2023_flagweight") ideally}
 }
 \description{
 Function to compute area harvested when new production and yield are given.

@@ -9,27 +9,28 @@ imputeProductionTriplet(
   processingParameters,
   formulaParameters,
   imputationParameters,
+  flagTable = ReadDatatable("flag_weight_table"),
   ...
 )
 }
 \arguments{
 \item{data}{The data}
 
-\item{processingParameters}{A list of the parameters for the production
-processing algorithms. See defaultProductionParameters() for a starting
-point.}
+\item{processingParameters}{A list of the parameters for the production processing algorithms.
+See defaultProductionParameters() for a starting point.}
 
-\item{formulaParameters}{A list holding the names and parmater of formulas.
-See \code{productionFormulaParameters}.}
+\item{formulaParameters}{A list holding the names and parmater of formulas. See
+\code{productionFormulaParameters}.}
 
 \item{imputationParameters}{A list holding the imputation parameters, see
 \code{getImputationParameters}.}
+
+\item{flagTable}{flag weight table to pass to computeYield. Please use
+ReadDatatable("ocs2023_flagweight") for all future code.}
 }
 \description{
-The function will impute production, area harvested and yield at the same
-time.
+The function will impute production, area harvested and yield at the same time.
 }
 \details{
-Transformation in the yield formula is not allowed and will not be taken
-into account.
+Transformation in the yield formula is not allowed and will not be taken into account.
 }

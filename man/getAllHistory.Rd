@@ -4,7 +4,12 @@
 \alias{getAllHistory}
 \title{Get All Production History}
 \usage{
-getAllHistory()
+getAllHistory(domain = "agriculture", dataset = "aproduction")
+}
+\arguments{
+\item{domain}{Domain from which to pull history}
+
+\item{dataset}{Dataset from which to pull history}
 }
 \value{
 A data.table object with the following columns:

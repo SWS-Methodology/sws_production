@@ -7,7 +7,7 @@
 #' 
 #' @param data dataset containing the the number of animal stocks (trade not included)
 #' @param validFlags table of valid flags. Uses Datatable \code{valid_flags} by default, but should use \code{valid_flags_ocs2023}
-#' @parame flagWeights table. Uses Datatable \code{flag_weight_table} by default, but should use \code{ocs2023_flagweight}
+#' @param flagWeights table. Uses Datatable \code{flag_weight_table} by default, but should use \code{ocs2023_flagweight}
 #' @return Returns a dataset with the the tot stock 
 #' 
 #' @export

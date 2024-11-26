@@ -9,7 +9,9 @@ getAllYieldKey(
   itemVar = "measuredItemCPC",
   elementVar = "measuredElement",
   yearVar = "timePointYears",
-  identityElements = c("31", "41", "51")
+  identityElements = c("31", "41", "51"),
+  domain = "agriculture",
+  dataset = "aproduction"
 )
 }
 \arguments{
@@ -23,6 +25,10 @@ getAllYieldKey(
 
 \item{identityElements}{The elements codes which are related to the
 production identity equation.}
+
+\item{domain}{Domain from which to pull yield data}
+
+\item{dataset}{Dataset from which to pull yield data}
 }
 \value{
 A DatasetKey comprise of all the codes which are relevant to the

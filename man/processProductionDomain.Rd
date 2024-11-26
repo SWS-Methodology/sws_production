@@ -5,7 +5,12 @@
 \title{This is a wrapper for all the data manipulation steps before the preparation
 of the imputation.}
 \usage{
-processProductionDomain(data, processingParameters, formulaParameters)
+processProductionDomain(
+  data,
+  processingParameters,
+  formulaParameters,
+  flagValidTable = ReadDatatable("valid_flags")
+)
 }
 \arguments{
 \item{data}{The data}
@@ -16,6 +21,8 @@ point.}
 
 \item{formulaParameters}{A list holding the names and parmater of formulas.
 See \code{productionFormulaParameters}.}
+
+\item{flagValidTable}{Table of valid flags. Please use ReadDatatable("valid_flags_ocs2023")}
 }
 \value{
 Currently it returns the passed data.table after performing some

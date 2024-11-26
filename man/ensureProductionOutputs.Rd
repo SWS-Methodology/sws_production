@@ -12,6 +12,7 @@ ensureProductionOutputs(
   testCalculated = FALSE,
   domain = "agriculture",
   dataset = "aproduction",
+  flagValidTable = ReadDatatable("valid_flags"),
   returnData = TRUE,
   normalised = TRUE
 )
@@ -33,6 +34,9 @@ See \code{productionFormulaParameters}.}
 \item{domain}{The domain to be saved back}
 
 \item{dataset}{The dataset to be saved back}
+
+\item{flagValidTable}{Datatable of valid flags. The default is a legacy version but the table
+"valid_flags_ocs2023" should be used instead}
 
 \item{returnData}{logical, whether the data should be returned}
 

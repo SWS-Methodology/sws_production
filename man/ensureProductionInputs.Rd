@@ -8,6 +8,7 @@ ensureProductionInputs(
   data,
   processingParameters,
   formulaParameters,
+  flagValidTable = ReadDatatable("valid_flags"),
   returnData = TRUE,
   normalised = TRUE
 )
@@ -15,12 +16,14 @@ ensureProductionInputs(
 \arguments{
 \item{data}{A data.table containing the data.}
 
-\item{processingParameters}{A list containing the parameters to be used in
-the processing algorithms.  See ?defaultProcessingParameters for a starting
-point.}
+\item{processingParameters}{A list containing the parameters to be used in the processing
+algorithms.  See ?defaultProcessingParameters for a starting point.}
 
-\item{formulaParameters}{A list holding the names and parmater of formulas.
-See \code{productionFormulaParameters}.}
+\item{formulaParameters}{A list holding the names and parmater of formulas. See
+\code{productionFormulaParameters}.}
+
+\item{flagValidTable}{Datatable of valid flags. The default is a legacy version but the table
+"valid_flags_ocs2023" should be used instead}
 
 \item{returnData}{logical, whether the data should be returned}
 

@@ -3,11 +3,10 @@
 ##' 
 ##' @name faoswsProduction-package
 ##' @aliases faoswsProduction
-##' @docType package
 ##' @title Package to perform the imputation of area harvested, production and
 ##'   yield for the FAO production domain.
 ##' @author Joshua M. Browning \email{joshua.browning@@fao.org}, Michael. C. J. 
 ##'   Kao \email{michael.kao@@fao.org}
 ##' @keywords package
 ##'   
-NULL
+"_PACKAGE"
