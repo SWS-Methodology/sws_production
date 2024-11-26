@@ -205,7 +205,8 @@ offtake_function <- function(data_table) {
                                            processingParameters = processingParameters,
                                            formulaParameters = formulaParameters,
                                            returnData = FALSE,
-                                           normalised = FALSE)
+                                           normalised = FALSE,
+                                           flagValidTable = ReadDatatable("valid_flags_ocs2023"))
                 })
                 
                 
