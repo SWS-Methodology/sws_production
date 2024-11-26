@@ -11,3 +11,5 @@ imputation.log
 sws.yml
 *.sh
 *.sw[a-z]
+
+log.txt

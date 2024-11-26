@@ -1,13 +1,32 @@
-##' This function pull the SUA table necessary to compute the availabilities
-##' for computing the processed item productions.
-##' 
+##' This function pull the SUA table necessary to compute the availabilities for computing the
+##' processed item productions.
+##'
+##' It may seem odd to have parameters for domains and datasets, but it can be useful when
+##' attempting to use it on test datasets
+##'
+##' @param agDomain Domain for agriculture production
+##' @param agDataset Dataset for agriculture production
+##' @param stockDomain Domain for Stock data
+##' @param stockDataset Dataset for Stock data
+##' @param tradeDomain Domain for CPC level trade data
+##' @param tradeDataset Domain for CPC level trade data
+##' @param fsTradeDomain Domain for FAOSTAT trade data, used for data from <=2013
+##' @param fsTradeDataset Dataset for FAOSTAT trade data, used for data from <=2013
 ##'
 ##' @export
-##'
+##' 
 
 
-getSUADataRestricted=function(){
+getSUADataRestricted=function(agDomain = "agriculture",
+                              agDataset = "aproduction",
+                              stockDomain = "Stock",
+                              stockDataset = "stocksdata",
+                              tradeDomain = "trade",
+                              tradeDataset = "total_trade_cpc_m49",
+                              fsTradeDomain = "faostat_one",
+                              fsTradeDataset = "updated_sua"){
 
+  sessionKey = swsContext.datasets[[1]]
 ##-------------------------------------------------------------------------------------------------------------------------------------
 importCode = "5610"
 exportCode = "5910"
@@ -28,7 +47,7 @@ eleDim = Dimension(name = "measuredElement", keys = c(productionCode, seedCode))
 itemKeys = primaryInvolvedDescendents
 itemDim = Dimension(name = "measuredItemCPC", keys = itemKeys)
 timeDim = Dimension(name = "timePointYears", keys = as.character(timeKeys))
-agKey = DatasetKey(domain = "agriculture", dataset = "aproduction",
+agKey = DatasetKey(domain = agDomain, dataset = agDataset,
                    dimensions = list(
                        geographicAreaM49 = geoDim,
                        measuredElement = eleDim,
@@ -47,7 +66,7 @@ setnames(agData, c("measuredElement", "measuredItemCPC"),
 
 message("Pulling data from Stock domain")
 stockEleDim = Dimension(name = "measuredElement", keys = c(stocksCode))
-stokKey = DatasetKey(domain = "Stock", dataset = "stocksdata",
+stokKey = DatasetKey(domain = stockDomain, dataset = stockDataset,
                    dimensions = list(
                        geographicAreaM49 = geoDim,
                        measuredElement = stockEleDim,
@@ -85,7 +104,7 @@ if(2013>=endYear){
     ###### Trade UNTIL 2013 (old FAOSTAT)
     message("Trade UNTIL 2013 (old FAOSTAT)")
     tradeKeyUp13 = DatasetKey(
-        domain = "faostat_one", dataset = "updated_sua",
+        domain = fsTradeDomain, dataset = fsTradeDataset,
         dimensions = list(
             #user input except curacao,  saint martin and former germany
             geographicAreaFS= Dimension(name = "geographicAreaFS", keys = setdiff(geokeysTrade, c("279", "534", "280","274","283"))),
@@ -110,7 +129,7 @@ if(2013>=endYear){
     
     tradeDataUp13[, flagMethod := "-"]
     
-    tradeDataUp13[flagObservationStatus %in% c("P", "*", "F"), flagObservationStatus := "T"]
+    tradeDataUp13[flagObservationStatus %in% c("P", "*", "F"), flagObservationStatus := "X"]
     
     tradeDataUp13[measuredElementSuaFbs=="91",measuredElementSuaFbs:="5910"]
     tradeDataUp13[measuredElementSuaFbs=="61",measuredElementSuaFbs:="5610"]
@@ -124,7 +143,7 @@ if(2013>=endYear){
     timeTradeDimFrom14 = Dimension(name = "timePointYears", keys = as.character(2014:endYear))
     
     tradeKeyFrom14 = DatasetKey(
-        domain = "trade", dataset = "total_trade_cpc_m49",
+        domain = tradeDomain, dataset = tradeDataset,
         dimensions = list(geographicAreaM49 = geoDim,
                           measuredElementTrade = eleTradeDim,
                           measuredItemCPC = itemDim,
@@ -167,7 +186,7 @@ if(2013>=endYear){
         
         tradeDataUp13[, flagMethod := "-"]
         
-        tradeDataUp13[flagObservationStatus %in% c("P", "*", "F"), flagObservationStatus := "T"]
+        tradeDataUp13[flagObservationStatus %in% c("P", "*", "F"), flagObservationStatus := "X"]
         
         tradeDataUp13[measuredElementSuaFbs=="91",measuredElementSuaFbs:="5910"]
         tradeDataUp13[measuredElementSuaFbs=="61",measuredElementSuaFbs:="5610"]

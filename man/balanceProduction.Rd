@@ -4,7 +4,12 @@
 \alias{balanceProduction}
 \title{Function to compute production when new area harvested and yield are given.}
 \usage{
-balanceProduction(data, processingParameters, formulaParameters)
+balanceProduction(
+  data,
+  processingParameters,
+  formulaParameters,
+  flagTable = ReadDatatable("flag_weight_table")
+)
 }
 \arguments{
 \item{data}{The data.table object containing the data.}
@@ -19,4 +24,3 @@ See \code{productionFormulaParameters}.}
 \description{
 Function to compute production when new area harvested and yield are given.
 }
-

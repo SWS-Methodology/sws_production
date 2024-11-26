@@ -6,13 +6,20 @@
 ##' @param toPubblish The set of commodities that we have to flag as "FAOSTAT" which are those that 
 ##'                   have a priority in the validation process.
 ##' @param pathToSave The path to the folder where the plots have to be saved.
-##' 
+##' @param agDomain Agriculture data domain. Used for naming data
+##' @param agDataset Agriculture dataset name. Used for naming data
+##' @param suaDomain SUA data domain. Used for naming data
+##' @param suaDataset SUA dataset name. Used for naming data
 ##'
 ##' @export
 ##'
 
 
-plotResult=function(data, toPubblish, pathToSave){
+plotResult=function(data, toPubblish, pathToSave, 
+                    agDomain = "agriculture",
+                    agDataset = "aproduction",
+                    suaDomain = "suafbs",
+                    suaDataset = "sua"){
     
     if(!file.exists(pathToSave)){
         dir.create(pathToSave, recursive = TRUE)
@@ -66,7 +73,7 @@ plotResult=function(data, toPubblish, pathToSave){
         ##     browser()
         
         
-        countryName=nameData("agriculture", "aproduction", toPlot_melt[,.(geographicAreaM49)])
+        countryName=nameData(agDomain, agDataset, toPlot_melt[,.(geographicAreaM49)])
         countryName=unique(countryName)
         
         
@@ -81,7 +88,7 @@ plotResult=function(data, toPubblish, pathToSave){
         syncedDataLabel[flagObservationStatus=="I" & flagMethod=="e", Imputed:=TRUE]
         syncedDataLabel[,geographicAreaM49_description:=paste0(geographicAreaM49_description, " MaxDiff/MaxProtectedValue :", score)]
         
-        fileName=nameData("suafbs", "sua", data.table(measuredItemSuaFbs=currentProcessed))
+        fileName=nameData(suaDomain, suaDataset, data.table(measuredItemSuaFbs=currentProcessed))
         
         fileName[measuredItemSuaFbs=="21399.02", measuredItemSuaFbs_description:="Tomatoes,PeeledVinegar"]
         fileName[measuredItemSuaFbs=="F0472", measuredItemSuaFbs_description:="vegetables preserved nesVinegar"]

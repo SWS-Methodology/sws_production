@@ -18,4 +18,3 @@ getPrimary(edge, tree, standParams)
 Function trace back to the primary item starting from an edge-item.
 It uses the commodity tree to go back level by level untill the first one.
 }
-

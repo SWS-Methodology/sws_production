@@ -4,8 +4,12 @@
 \alias{computeYield}
 \title{Function to compute and update yield}
 \usage{
-computeYield(data, processingParameters, formulaParameters,
-  flagTable = faoswsFlagTable)
+computeYield(
+  data,
+  processingParameters,
+  formulaParameters,
+  flagTable = faoswsFlagTable
+)
 }
 \arguments{
 \item{data}{The data.table object containing the data.}
@@ -17,7 +21,8 @@ point.}
 \item{formulaParameters}{A list holding the names and parmater of formulas.
 See \code{productionFormulaParameters}.}
 
-\item{flagTable}{see data(faoswsFlagTable) in \pkg{faoswsFlag}}
+\item{flagTable}{see data(faoswsFlagTable) in \pkg{faoswsFlag}. Please use
+ReadDatatable("ocs2023_flagweight") for all future code.}
 }
 \value{
 The updated data.table.
@@ -25,4 +30,3 @@ The updated data.table.
 \description{
 Function to compute and update yield
 }
-

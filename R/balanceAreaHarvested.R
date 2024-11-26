@@ -2,17 +2,22 @@
 ##'
 ##' @param data The data.table object containing the data.
 ##' @param processingParameters A list of the parameters for the production
-##'     processing algorithms. See \code{productionProcessingParameters} for a
-##'     starting point.
+##'   processing algorithms. See \code{productionProcessingParameters} for a
+##'   starting point.
 ##' @param formulaParameters A list holding the names and parmater of formulas.
-##'     See \code{productionFormulaParameters}.
+##'   See \code{productionFormulaParameters}.
+##'
+##' @param flagTable Flag weight table. Uses an obsolete one
+##'   ("flag_weight_table") by default for compatibility but should use
+##'   ("ocs2023_flagweight") ideally
 ##'
 ##' @export
-##'
+##' 
 
 balanceAreaHarvested = function(data,
                                 processingParameters,
-                                formulaParameters){
+                                formulaParameters,
+                                flagTable = ReadDatatable("flag_weight_table")){
 
 
     dataCopy = copy(data)
@@ -67,7 +72,8 @@ balanceAreaHarvested = function(data,
     dataCopy[feasibleFilter & nonZeroYieldFilter,
              `:=`(c(formulaParameters$areaHarvestedObservationFlag),
                   aggregateObservationFlag(get(formulaParameters$productionObservationFlag),
-                                           get(formulaParameters$yieldObservationFlag)))]
+                                           get(formulaParameters$yieldObservationFlag),
+                                           flagTable = flagTable))]
     
     dataCopy[feasibleFilter & !nonZeroYieldFilter,
              `:=`(c(formulaParameters$areaHarvestedObservationFlag),

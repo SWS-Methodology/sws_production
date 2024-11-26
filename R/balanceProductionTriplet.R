@@ -20,7 +20,7 @@ balanceProductionTriplet = function(data,
                                     processingParameters,
                                     formulaParameters){
     dataCopy = copy(data)
-
+    
     ## Data quality check
     suppressMessages({
         ensureProductionInputs(dataCopy,
@@ -29,19 +29,19 @@ balanceProductionTriplet = function(data,
                                returnData = FALSE,
                                normalised = FALSE)
     })
-
+    
     yieldComputed =
         computeYield(data = dataCopy,
                      processingParameters = processingParams,
-                     formulaParameters = formulaParameters)
+                     formulaParameters = formulaParameters, flagTable = ReadDatatable("ocs2023_flagweight"))
     productionBalanced =
         balanceProduction(data = yieldComputed,
                           processingParameters = processingParams,
-                          formulaParameters = formulaParameters)
+                          formulaParameters = formulaParameters,flagTable = ReadDatatable("ocs2023_flagweight"))
     areaHarvestedBalanced =
         balanceAreaHarvested(data = productionBalanced,
                              processingParameters = processingParams,
-                             formulaParameters = formulaParameters)
-
+                             formulaParameters = formulaParameters,flagTable = ReadDatatable("ocs2023_flagweight"))
+    
     areaHarvestedBalanced
 }

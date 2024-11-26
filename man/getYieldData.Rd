@@ -16,4 +16,3 @@ A list containing the yield data, the yield formula and also the
 \description{
 This function extracts the yield data
 }
-
