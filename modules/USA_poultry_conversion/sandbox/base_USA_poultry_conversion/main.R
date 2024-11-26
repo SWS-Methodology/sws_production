@@ -40,7 +40,7 @@ R_SWS_SHARE_PATH = Sys.getenv("R_SWS_SHARE_PATH")
 if (CheckDebug()) {
   
   library(faoswsModules)
-  SETTINGS <- ReadSettings("sws.yml")
+  SETTINGS <- ReadSettings("sandbox/base_USA_poultry_conversion/sws.yml")
   
   ## If you're not on the system, your settings will overwrite any others
   R_SWS_SHARE_PATH <- SETTINGS[["share"]]

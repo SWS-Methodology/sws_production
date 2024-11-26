@@ -37,6 +37,7 @@ suppressMessages({
 
 R_SWS_SHARE_PATH = Sys.getenv("R_SWS_SHARE_PATH")
 
+
 if (CheckDebug()) {
     
     library(faoswsModules)
@@ -52,6 +53,10 @@ if (CheckDebug()) {
     
     GetTestEnvironment(baseUrl = SETTINGS[["server"]],
                        token = SETTINGS[["token"]])
+    
+    # source("")
+    lapply(list.files("../../R", full.names = T), source, echo = FALSE)
+    # sapply("", source)
 }
 # Get data configuration and session
 sessionKey = swsContext.datasets[[1]]
