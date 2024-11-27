@@ -8,7 +8,8 @@ computeYield(
   data,
   processingParameters,
   formulaParameters,
-  flagTable = faoswsFlagTable
+  flagTable = ReadDatatable("flag_weight_table"),
+  validFlags = ReadDatatable("valid_flags")
 )
 }
 \arguments{
@@ -23,6 +24,9 @@ See \code{productionFormulaParameters}.}
 
 \item{flagTable}{see data(faoswsFlagTable) in \pkg{faoswsFlag}. Please use
 ReadDatatable("ocs2023_flagweight") for all future code.}
+
+\item{validFlags}{Valid flags. Please use validFlags = ReadDatatable("valid_flags_ocs2023")
+for future code}
 }
 \value{
 The updated data.table.
