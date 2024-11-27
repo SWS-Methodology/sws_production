@@ -6,6 +6,8 @@
 ##'   point.
 ##' @param flagTable see data(faoswsFlagTable) in \pkg{faoswsFlag}. Please use
 ##'   ReadDatatable("ocs2023_flagweight") for all future code.
+##' @param validFlags Valid flags. Please use validFlags = ReadDatatable("valid_flags_ocs2023")
+##'     for future code
 ##' @param formulaParameters A list holding the names and parmater of formulas.
 ##'     See \code{productionFormulaParameters}.
 ##'
@@ -19,7 +21,8 @@
 computeYield = function(data,
                         processingParameters,
                         formulaParameters,
-                        flagTable = faoswsFlagTable){
+                        flagTable = ReadDatatable("flag_weight_table"),
+                        validFlags = ReadDatatable("valid_flags")){
   
   dataCopy = copy(data)
   
@@ -29,7 +32,8 @@ computeYield = function(data,
                            processingParameters = processingParameters,
                            formulaParameters = formulaParameters,
                            returnData = FALSE,
-                           normalised = FALSE)
+                           normalised = FALSE,
+                           flagValidTable = validFlags)
   })
   
   ## Balance yield values only when they're missing, and both production and
