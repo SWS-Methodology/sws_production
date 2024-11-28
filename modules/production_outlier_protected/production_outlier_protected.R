@@ -1503,16 +1503,16 @@ if(nrow(miss_last_utilization) != 0){
         #get string that contains p
         #grepl("p", "T p", fixed = TRUE)
         
-        nso_utilization <- miss_last_utilization_cast[grepl("p", last_year, fixed = T) & !grepl("T", last_year, fixed = T),]
+        nso_utilization <- miss_last_utilization_cast[grepl("p", last_year, fixed = FALSE) & !grepl("[TX]", last_year, fixed = FALSE),]
         
-        tp_utilization <- miss_last_utilization_cast[grepl("p", last_year, fixed = T) & grepl("T", last_year, fixed = T),]
+        tp_utilization <- miss_last_utilization_cast[grepl("p", last_year, fixed = FALSE) & grepl("[TX]", last_year, fixed = FALSE),]
         
-        semi_official_utilization <- miss_last_utilization_cast[!grepl("p", last_year, fixed = T) & grepl("T", last_year, fixed = T),]
+        semi_official_utilization <- miss_last_utilization_cast[!grepl("p", last_year, fixed = FALSE) & grepl("[TX]", last_year, fixed = FALSE),]
         
-        others_utilization <- miss_last_utilization_cast[!grepl("p", last_year, fixed = T) & !grepl("T", last_year, fixed = T) &
-                                                             !grepl("q", last_year, fixed = T),]
+        others_utilization <- miss_last_utilization_cast[!grepl("p", last_year, fixed = FALSE) & !grepl("[TX]", last_year, fixed = FALSE) &
+                                                             !grepl("q", last_year, fixed = FALSE),]
         
-        quest_utilization <- miss_last_utilization_cast[grepl("q", last_year, fixed = T),]
+        quest_utilization <- miss_last_utilization_cast[grepl("q", last_year, fixed = FALSE),]
         
         miss_last_utilization_cast <- rbind(nso_utilization, tp_utilization, semi_official_utilization, others_utilization, quest_utilization)
         
