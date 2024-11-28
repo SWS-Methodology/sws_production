@@ -11,6 +11,8 @@
 ##'   point.
 ##' @param formulaParameters A list holding the names and parmater of formulas.
 ##'     See \code{productionFormulaParameters}.
+##'     
+##' @param flagTable Flag weight table. Please use ReadDatatable("ocs2023_flagweight")
 ##'
 ##' @return Data where production triplet is calculated where available.
 ##'
@@ -18,7 +20,8 @@
 
 balanceProductionTriplet = function(data,
                                     processingParameters,
-                                    formulaParameters){
+                                    formulaParameters,
+                                    flagTable = ReadDatatable("flag_weight_table")){
     dataCopy = copy(data)
     
     ## Data quality check
@@ -33,15 +36,15 @@ balanceProductionTriplet = function(data,
     yieldComputed =
         computeYield(data = dataCopy,
                      processingParameters = processingParams,
-                     formulaParameters = formulaParameters, flagTable = ReadDatatable("ocs2023_flagweight"))
+                     formulaParameters = formulaParameters, flagTable = flagTable)
     productionBalanced =
         balanceProduction(data = yieldComputed,
                           processingParameters = processingParams,
-                          formulaParameters = formulaParameters,flagTable = ReadDatatable("ocs2023_flagweight"))
+                          formulaParameters = formulaParameters,flagTable = flagTable)
     areaHarvestedBalanced =
         balanceAreaHarvested(data = productionBalanced,
                              processingParameters = processingParams,
-                             formulaParameters = formulaParameters,flagTable = ReadDatatable("ocs2023_flagweight"))
+                             formulaParameters = formulaParameters,flagTable = flagTable)
     
     areaHarvestedBalanced
 }

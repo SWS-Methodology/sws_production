@@ -5,7 +5,12 @@
 \title{This function balances the production triplet (input, productivity, output)
 values for production where values are missing.}
 \usage{
-balanceProductionTriplet(data, processingParameters, formulaParameters)
+balanceProductionTriplet(
+  data,
+  processingParameters,
+  formulaParameters,
+  flagTable = ReadDatatable("flag_weight_table")
+)
 }
 \arguments{
 \item{data}{The data containing the production triplet}
@@ -16,6 +21,8 @@ point.}
 
 \item{formulaParameters}{A list holding the names and parmater of formulas.
 See \code{productionFormulaParameters}.}
+
+\item{flagTable}{Flag weight table. Please use ReadDatatable("ocs2023_flagweight")}
 }
 \value{
 Data where production triplet is calculated where available.
