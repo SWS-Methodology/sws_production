@@ -39,6 +39,9 @@ start_time <- Sys.time()
 R_SWS_SHARE_PATH <- Sys.getenv("R_SWS_SHARE_PATH")
 
 if (CheckDebug()) {
+    
+    invisible(lapply(list.files("R", full.names = TRUE), source))
+    
     R_SWS_SHARE_PATH <- "//hqlprsws1.hq.un.fao.org/sws_r_share"
     
     mydir <- "modules/production_outlier_protected/"
