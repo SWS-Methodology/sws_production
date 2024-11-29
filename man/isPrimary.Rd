@@ -18,4 +18,3 @@ logical, whether the item is a primary commodity
 \description{
 HACK (Michael): This is a hack from Josh, a list should be provided.
 }
-

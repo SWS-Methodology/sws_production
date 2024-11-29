@@ -9,6 +9,8 @@
 ##' @param itemVar The name of the item variable column.
 ##' @param warn Logical.  If FALSE, an error is thrown for missing element
 ##'   types.  If TRUE, it is simply a warning.
+##' @param domain Domain from which to pull item data 
+##' @param dataset Dataset from which to pull item data
 ##'
 ##' @return A data.table object providing the relevant element codes.  In some
 ##'   cases, there may be multiple rows, as it is possible to have multiple
@@ -18,8 +20,11 @@
 
 getProductionFormula = function(itemCode,
                                 itemVar = "measuredItemCPC",
-                                warn = FALSE){
-    itemData = GetCodeList(domain = "agriculture", dataset = "aproduction",
+                                warn = FALSE,
+                                domain = "agriculture",
+                                dataset = "aproduction"){
+  
+    itemData = GetCodeList(domain = domain, dataset = dataset,
                            dimension = itemVar, codes = itemCode)
     itemData = itemData[!is.na(type), ]
     if(nrow(itemData) == 0)

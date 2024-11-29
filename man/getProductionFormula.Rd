@@ -4,7 +4,13 @@
 \alias{getProductionFormula}
 \title{Get Yield Formula}
 \usage{
-getProductionFormula(itemCode, itemVar = "measuredItemCPC", warn = FALSE)
+getProductionFormula(
+  itemCode,
+  itemVar = "measuredItemCPC",
+  warn = FALSE,
+  domain = "agriculture",
+  dataset = "aproduction"
+)
 }
 \arguments{
 \item{itemCode}{The cpc code providing the commodity of interest.  This
@@ -14,6 +20,10 @@ should be a character string.}
 
 \item{warn}{Logical.  If FALSE, an error is thrown for missing element
 types.  If TRUE, it is simply a warning.}
+
+\item{domain}{Domain from which to pull item data}
+
+\item{dataset}{Dataset from which to pull item data}
 }
 \value{
 A data.table object providing the relevant element codes.  In some
@@ -25,4 +35,3 @@ This function provides the element codes (for production, yield, and output)
 and conversion factor which correspond to the particular item code of
 interest.
 }
-

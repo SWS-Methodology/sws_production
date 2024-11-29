@@ -4,10 +4,19 @@
 \alias{computeTotSlaughtered}
 \title{computeTotStock}
 \usage{
-computeTotSlaughtered(data, FormulaParameters = animalFormulaParameters)
+computeTotSlaughtered(
+  data,
+  FormulaParameters = animalFormulaParameters,
+  validFlags = ReadDatatable("valid_flags"),
+  flagWeights = ReadDatatable("flag_weight_table")
+)
 }
 \arguments{
-\item{data}{datataset containing the the numeber of animal stocks (trade not included)}
+\item{data}{dataset containing the the number of animal stocks (trade not included)}
+
+\item{validFlags}{table of valid flags. Uses Datatable \code{valid_flags} by default, but should use \code{valid_flags_ocs2023}}
+
+\item{flagWeights}{table. Uses Datatable \code{flag_weight_table} by default, but should use \code{ocs2023_flagweight}}
 }
 \value{
 Returns a dataset with the the tot stock
@@ -17,4 +26,3 @@ This function has been created to compute the totStock that has to be used as
 reference to compue the take off rates and consequently the number of slaughtered  animals.
 In order to compute the total animal stocks, trade has to be taken into account
 }
-

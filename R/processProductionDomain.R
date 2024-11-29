@@ -7,6 +7,7 @@
 ##'   point.
 ##' @param formulaParameters A list holding the names and parmater of formulas.
 ##'     See \code{productionFormulaParameters}.
+##' @param flagValidTable Table of valid flags. Please use ReadDatatable("valid_flags_ocs2023")
 ##' @export
 ##'
 ##' @return Currently it returns the passed data.table after performing some
@@ -18,7 +19,8 @@
 
 processProductionDomain = function(data,
                                    processingParameters,
-                                   formulaParameters){
+                                   formulaParameters,
+                                   flagValidTable = ReadDatatable("valid_flags")){
     dataCopy = copy(data)
 
     ## Data quality check
@@ -50,7 +52,7 @@ processProductionDomain = function(data,
                                     missingMethodFlag = "u",
                                     normalised= FALSE,
                                     denormalisedKey = "measuredElement",
-                                    flagValidTable= faoswsFlag::flagValidTable)
+                                    flagValidTable = flagValidTable)
 
     }    
     

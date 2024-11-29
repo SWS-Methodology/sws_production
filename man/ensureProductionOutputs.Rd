@@ -4,9 +4,18 @@
 \alias{ensureProductionOutputs}
 \title{Check Production Inputs}
 \usage{
-ensureProductionOutputs(data, processingParameters, formulaParameters,
-  testImputed = FALSE, testCalculated = FALSE, domain = "agriculture",
-  dataset = "aproduction", returnData = TRUE, normalised = TRUE)
+ensureProductionOutputs(
+  data,
+  processingParameters,
+  formulaParameters,
+  testImputed = FALSE,
+  testCalculated = FALSE,
+  domain = "agriculture",
+  dataset = "aproduction",
+  flagValidTable = ReadDatatable("valid_flags"),
+  returnData = TRUE,
+  normalised = TRUE
+)
 }
 \arguments{
 \item{data}{A data.table containing the data.}
@@ -26,6 +35,9 @@ See \code{productionFormulaParameters}.}
 
 \item{dataset}{The dataset to be saved back}
 
+\item{flagValidTable}{Datatable of valid flags. The default is a legacy version but the table
+"valid_flags_ocs2023" should be used instead}
+
 \item{returnData}{logical, whether the data should be returned}
 
 \item{normalised}{logical, whether the data is normalised}
@@ -36,4 +48,3 @@ The original data if all tests are passed
 \description{
 This function is designed to ensure that the dataset to be saved is valid.
 }
-

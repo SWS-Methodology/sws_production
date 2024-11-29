@@ -15,10 +15,11 @@ URL: https://github.com/SWS-Methodology/faoswsProduction
 License: GPL (>= 3)
 Depends: faoswsFlag (>= 0.1.0), faoswsImputation, faoswsUtil,
         faoswsProcessing, faoswsEnsure, data.table (>= 1.9.2)
+Encoding: UTF-8
 swsDatasetDepends: agriculture:aproduction, item_type_yield_elements
 swsModuleDepends:
 LazyData: yes
 ZipData: no
 VignetteBuilder: knitr
 Suggests: knitr, ggplot2, faosws, xtable, testthat
-RoxygenNote: 5.0.1
+RoxygenNote: 7.3.2

@@ -2,13 +2,38 @@
 % Please edit documentation in R/getSUADataRestricted.R
 \name{getSUADataRestricted}
 \alias{getSUADataRestricted}
-\title{This function pull the SUA table necessary to compute the availabilities
-for computing the processed item productions.}
+\title{This function pull the SUA table necessary to compute the availabilities for computing the
+processed item productions.}
 \usage{
-getSUADataRestricted()
+getSUADataRestricted(
+  agDomain = "agriculture",
+  agDataset = "aproduction",
+  stockDomain = "Stock",
+  stockDataset = "stocksdata",
+  tradeDomain = "trade",
+  tradeDataset = "total_trade_cpc_m49",
+  fsTradeDomain = "faostat_one",
+  fsTradeDataset = "updated_sua"
+)
+}
+\arguments{
+\item{agDomain}{Domain for agriculture production}
+
+\item{agDataset}{Dataset for agriculture production}
+
+\item{stockDomain}{Domain for Stock data}
+
+\item{stockDataset}{Dataset for Stock data}
+
+\item{tradeDomain}{Domain for CPC level trade data}
+
+\item{tradeDataset}{Domain for CPC level trade data}
+
+\item{fsTradeDomain}{Domain for FAOSTAT trade data, used for data from <=2013}
+
+\item{fsTradeDataset}{Dataset for FAOSTAT trade data, used for data from <=2013}
 }
 \description{
-This function pull the SUA table necessary to compute the availabilities
-for computing the processed item productions.
+It may seem odd to have parameters for domains and datasets, but it can be useful when
+attempting to use it on test datasets
 }
-

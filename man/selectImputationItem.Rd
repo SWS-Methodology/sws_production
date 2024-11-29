@@ -21,4 +21,3 @@ A vector containing the commodity items that are selected and is
 This function returns the commodity codes which are selected in the session
 and is in the imputation list
 }
-

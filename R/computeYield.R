@@ -4,7 +4,10 @@
 ##' @param processingParameters A list of the parameters for the production
 ##'   processing algorithms.  See defaultProductionParameters() for a starting
 ##'   point.
-##' @param flagTable see data(faoswsFlagTable) in \pkg{faoswsFlag}
+##' @param flagTable see data(faoswsFlagTable) in \pkg{faoswsFlag}. Please use
+##'   ReadDatatable("ocs2023_flagweight") for all future code.
+##' @param validFlags Valid flags. Please use validFlags = ReadDatatable("valid_flags_ocs2023")
+##'     for future code
 ##' @param formulaParameters A list holding the names and parmater of formulas.
 ##'     See \code{productionFormulaParameters}.
 ##'
@@ -18,35 +21,37 @@
 computeYield = function(data,
                         processingParameters,
                         formulaParameters,
-                        flagTable = faoswsFlagTable){
-    
-    dataCopy = copy(data)
-    
-    ## Data quality check
-    suppressMessages({
-        ensureProductionInputs(dataCopy,
-                               processingParameters = processingParameters,
-                               formulaParameters = formulaParameters,
-                               returnData = FALSE,
-                               normalised = FALSE)
-    })
-    
-    ## Balance yield values only when they're missing, and both production and
-    ## area harvested are not missing
-    ##
-    ## NOTE (Michael): When production is zero, it would result in zero yield.
-    ##                 Yield can not be zero by definition. If the production is
-    ##                 zero, then yield should remain a missing value as we can
-    ##                 not observe the yield.
-    missingYield =
-        is.na(dataCopy[[formulaParameters$yieldValue]])&
-        dataCopy[[formulaParameters$yieldMethodFlag]]!="-"
-    nonMissingProduction =
-        !is.na(dataCopy[[formulaParameters$productionValue]]) &
-        dataCopy[[formulaParameters$productionObservationFlag]] != processingParameters$missingValueObservationFlag
-    nonMissingAreaHarvested =
-        !is.na(dataCopy[[formulaParameters$areaHarvestedValue]]) &
-        dataCopy[[formulaParameters$areaHarvestedObservationFlag]] != processingParameters$missingValueObservationFlag
+                        flagTable = ReadDatatable("flag_weight_table"),
+                        validFlags = ReadDatatable("valid_flags")){
+  
+  dataCopy = copy(data)
+  
+  ## Data quality check
+  suppressMessages({
+    ensureProductionInputs(dataCopy,
+                           processingParameters = processingParameters,
+                           formulaParameters = formulaParameters,
+                           returnData = FALSE,
+                           normalised = FALSE,
+                           flagValidTable = validFlags)
+  })
+  
+  ## Balance yield values only when they're missing, and both production and
+  ## area harvested are not missing
+  ##
+  ## NOTE (Michael): When production is zero, it would result in zero yield.
+  ##                 Yield can not be zero by definition. If the production is
+  ##                 zero, then yield should remain a missing value as we can
+  ##                 not observe the yield.
+  missingYield =
+    is.na(dataCopy[[formulaParameters$yieldValue]])&
+    dataCopy[[formulaParameters$yieldMethodFlag]]!="-"
+  nonMissingProduction =
+    !is.na(dataCopy[[formulaParameters$productionValue]]) &
+    dataCopy[[formulaParameters$productionObservationFlag]] != processingParameters$missingValueObservationFlag
+  nonMissingAreaHarvested =
+    !is.na(dataCopy[[formulaParameters$areaHarvestedValue]]) &
+    dataCopy[[formulaParameters$areaHarvestedObservationFlag]] != processingParameters$missingValueObservationFlag
   ##When production is zero (numerator) we want to compute in any case the yield tha must be zero as well!
   ##This idea is not in line with the original approach of the module: the yield should have been     
   ##nonZeroProduction =
@@ -81,7 +86,20 @@ computeYield = function(data,
     dataCopy[feasibleFilter & nonZeroAreaHarvestedFilter,
              `:=`(c(formulaParameters$yieldObservationFlag),
                   aggregateObservationFlag(get(formulaParameters$productionObservationFlag),
-                                           get(formulaParameters$areaHarvestedObservationFlag)))]
+                                           get(formulaParameters$areaHarvestedObservationFlag),
+                                           flagTable = flagTable))]
+    
+    # OCS2023: Added this in here to fix any issues with (blank) and T flags
+    if(processingParameters$convertOCS2023Flags){
+      dataCopy[get(formulaParameters$yieldObservationFlag) == "",
+               `:=`(c(formulaParameters$yieldObservationFlag),
+                    "A")]
+      
+      dataCopy[get(formulaParameters$yieldObservationFlag) == "T",
+               `:=`(c(formulaParameters$yieldObservationFlag),
+                    "X")]
+    }
+    
     
     ##Assign Observation flag M to that ratio with areaHarvested=0
     dataCopy[feasibleFilter & !nonZeroAreaHarvestedFilter,

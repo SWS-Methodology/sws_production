@@ -5,7 +5,15 @@
 \title{This function has been created to plot PROCESSED data results
 It is very Module-specific}
 \usage{
-plotResult(data, toPubblish, pathToSave)
+plotResult(
+  data,
+  toPubblish,
+  pathToSave,
+  agDomain = "agriculture",
+  agDataset = "aproduction",
+  suaDomain = "suafbs",
+  suaDataset = "sua"
+)
 }
 \arguments{
 \item{data}{The data.table we want to plot}
@@ -14,9 +22,16 @@ plotResult(data, toPubblish, pathToSave)
 have a priority in the validation process.}
 
 \item{pathToSave}{The path to the folder where the plots have to be saved.}
+
+\item{agDomain}{Agriculture data domain. Used for naming data}
+
+\item{agDataset}{Agriculture dataset name. Used for naming data}
+
+\item{suaDomain}{SUA data domain. Used for naming data}
+
+\item{suaDataset}{SUA dataset name. Used for naming data}
 }
 \description{
 This function has been created to plot PROCESSED data results
 It is very Module-specific
 }
-
