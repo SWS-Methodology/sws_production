@@ -67,13 +67,10 @@ R_SWS_SHARE_PATH <- Sys.getenv("R_SWS_SHARE_PATH")
 if (CheckDebug()) {
 
     library(faoswsModules)
-    SETTINGS <- ReadSettings("modules/production_imputation_not_livestock/sws.yml")
+    SETTINGS <- ReadSettings("modules/Crop Production Imputation/sws.yml")
 
     ## If you're not on the system, your settings will overwrite any others
     R_SWS_SHARE_PATH <- SETTINGS[["share"]]
-
-    ## Define where your certificates are stored
-    SetClientFiles(SETTINGS[["certdir"]])
 
     ## Get session information from SWS. Token must be obtained from web interface
 
@@ -351,13 +348,13 @@ imputationSelection <- swsContext.computationParams$imputation_selection
 
 # DEBUG
 
-#imputationStartYear <- as.numeric(swsContext.computationParams$start_year)
-imputationStartYear <- 2000
+imputationStartYear <- as.numeric(swsContext.computationParams$start_year)
+#imputationStartYear <- 2000
 ##' Check the validity of the computational parameter
 stopifnot(imputationStartYear >= 1991)
 
 #DEBUG
-imputationSelection = "session"
+#imputationSelection = "session"
 
 if(!imputationSelection %in% c("session", "all"))
     stop("Incorrect imputation selection specified")
@@ -375,11 +372,13 @@ datasetConfig <- GetDatasetConfig(domainCode = sessionKey@domain,
 ##' Build processing parameters
 processingParameters <-
     productionProcessingParameters(datasetConfig = datasetConfig)
+processingParameters@domain <- sessionKey@domain
+processingParameters@dataset <- sessionKey@dataset
 
 lastYear=as.numeric(swsContext.computationParams$last_year)
 
 #DEBUG
-lastYear=2021
+#lastYear=2021
 
 
 ## Inserting the list of EU countries declared in the MoU. If the user decide to exclude them from the imputation
@@ -401,6 +400,8 @@ eu_list <- geographic_table[, geographicAreaM49]
 
 ##' Get the full imputation Datakey
 completeImputationKey <- getCompleteImputationKey("production")
+completeImputationKey@domain <- sessionKey@domain
+completeImputationKey@dataset <- sessionKey@dataset
 
 # Exclude 835, which is in QA but not in LIVE
 
@@ -882,14 +883,14 @@ body_message <- sprintf(
     please check non_livestock_imputation_result.csv")
 
 if (!CheckDebug()) {
-    send_mail(
-        from <- "sws@fao.org",
-        to <- swsContext.userEmail,
-        subject <- "Crops module",
-        body = c(body_message,
-                 tmp_file_no_imputed
-        )
-    )
+    # send_mail(
+    #     from <- "sws@fao.org",
+    #     to <- swsContext.userEmail,
+    #     subject <- "Crops module",
+    #     body = c(body_message,
+    #              tmp_file_no_imputed
+    #     )
+    # )
 }
 
 unlink(TMP_DIR, recursive = TRUE)
