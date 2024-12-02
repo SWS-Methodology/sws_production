@@ -50,8 +50,8 @@ sessionKey = swsContext.datasets[[1]]
 
 data <- GetData(sessionKey)
 
-datasetConfig <- GetDatasetConfig(domainCode = "agriculture",
-                                  datasetCode = "aproduction")
+datasetConfig <- GetDatasetConfig(domainCode = sessionKey@domain,
+                                  datasetCode = sessionKey@dataset)
 
 processingParameters <-
     productionProcessingParameters(datasetConfig = datasetConfig)
