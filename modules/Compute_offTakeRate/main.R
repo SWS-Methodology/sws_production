@@ -35,9 +35,6 @@ if (CheckDebug()) {
     ## If you're not on the system, your settings will overwrite any others
     R_SWS_SHARE_PATH <- SETTINGS[["share"]]
     
-    ## Define where your certificates are stored
-    SetClientFiles(SETTINGS[["certdir"]])
-    
     ## Get session information from SWS. Token must be obtained from web interface
     
     GetTestEnvironment(baseUrl = SETTINGS[["server"]],
@@ -50,8 +47,8 @@ sessionKey = swsContext.datasets[[1]]
 
 data <- GetData(sessionKey)
 
-datasetConfig <- GetDatasetConfig(domainCode = "agriculture",
-                                  datasetCode = "aproduction")
+datasetConfig <- GetDatasetConfig(domainCode = sessionKey@domain,
+                                  datasetCode = sessionKey@dataset)
 
 processingParameters <-
     productionProcessingParameters(datasetConfig = datasetConfig)
