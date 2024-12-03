@@ -456,13 +456,13 @@ SaveData(domain = sessionKey@domain,
 #              data = completeTriplet)
 # }
 
-if(!CheckDebug()){
-    ## Initiate email
-    from = "sws@fao.org"
-    to = swsContext.userEmail
-    subject = "Milk production module"
-    body = paste0("Milk production module successfully ran. You can browse results in the session: ", sessionKey@sessionId )
-    sendmail(from = from, to = to, subject = subject, msg = body)
-}
+# if(!CheckDebug()){
+#     ## Initiate email
+#     from = "sws@fao.org"
+#     to = swsContext.userEmail
+#     subject = "Milk production module"
+#     body = paste0("Milk production module successfully ran. You can browse results in the session: ", sessionKey@sessionId )
+#     sendmail(from = from, to = to, subject = subject, msg = body)
+# }
 
 message("Module finished successfully")
