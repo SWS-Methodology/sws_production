@@ -39,14 +39,11 @@ R_SWS_SHARE_PATH = Sys.getenv("R_SWS_SHARE_PATH")
 if (CheckDebug()) {
     
     library(faoswsModules)
-    SETTINGS <- ReadSettings("modules/Crop_Livestock_Milk_Outlier_Correction/sws.yml")
+    SETTINGS <- ReadSettings("modules/SingleSeries_corrector_outliers/sws.yml")
     
     ## If you're not on the system, your settings will overwrite any others
     R_SWS_SHARE_PATH <- SETTINGS[["share"]]
-    
-    ## Define where your certificates are stored
-    SetClientFiles(SETTINGS[["certdir"]])
-    
+
     ## Get session information from SWS. Token must be obtained from web interface
     
     GetTestEnvironment(baseUrl = SETTINGS[["server"]],
@@ -58,6 +55,8 @@ datasetConfig = GetDatasetConfig(domainCode = sessionKey@domain,
                                  datasetCode = sessionKey@dataset)
 
 completeImputationKey = getCompleteImputationKey("production")
+completeImputationKey@domain <- sessionKey@domain
+completeImputationKey@dataset <- sessionKey@dataset
 
 # CROP,LIVESTOCK or MILK
 ##'Imputation selection rimane per definire la categoria di item
