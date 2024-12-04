@@ -46,7 +46,7 @@ R_SWS_SHARE_PATH = Sys.getenv("R_SWS_SHARE_PATH")
 if(CheckDebug()){
     
     library(faoswsModules)
-    SETTINGS = ReadSettings("modules/animal_stockFRANCESCA/sws.yml")
+    SETTINGS = ReadSettings("modules/Egg Production Imputation/sws.yml")
     
     ## If you're not on the system, your settings will overwrite any others
     R_SWS_SHARE_PATH = SETTINGS[["share"]]
@@ -100,6 +100,8 @@ processingParameters = productionProcessingParameters(datasetConfig = datasetCon
 ##' Obtain the complete imputation key
 
 completeImputationKey = getCompleteImputationKey("production")
+completeImputationKey@domain <- sessionKey@domain
+completeImputationKey@dataset <- sessionKey@dataset
 
 completeImputationKey@dimensions$timePointYears@keys <-
     as.character(min(completeImputationKey@dimensions$timePointYears@keys):lastYear)
@@ -135,7 +137,7 @@ livestockData <- GetData(completeImputationKey)
 ## ---------------------------------------------------------------------
 ##Pull eggs animals
 
-itemMap = GetCodeList(domain = "agriculture", dataset = "aproduction", "measuredItemCPC")
+itemMap = GetCodeList(domain = sessionKey@domain, dataset = sessionKey@dataset, "measuredItemCPC")
 
 eggsItems = itemMap[type == "EGGW", code]
 
@@ -568,12 +570,12 @@ SaveData(domain = sessionKey@domain,
  
 
 if (!CheckDebug()) {
-    ## Initiate email
-    from = "sws@fao.org"
-    to = swsContext.userEmail
-    subject = "Eggs production module"
-    body = paste0("Eggs production module successfully ran. You can browse results in the session: ", sessionKey@sessionId )
-    sendmail(from = from, to = to, subject = subject, msg = body)
+    # ## Initiate email
+    # from = "sws@fao.org"
+    # to = swsContext.userEmail
+    # subject = "Eggs production module"
+    # body = paste0("Eggs production module successfully ran. You can browse results in the session: ", sessionKey@sessionId )
+    # sendmail(from = from, to = to, subject = subject, msg = body)
 }
 
 message("Module finished successfully")
