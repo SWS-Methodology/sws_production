@@ -372,8 +372,8 @@ datasetConfig <- GetDatasetConfig(domainCode = sessionKey@domain,
 ##' Build processing parameters
 processingParameters <-
     productionProcessingParameters(datasetConfig = datasetConfig)
-processingParameters@domain <- sessionKey@domain
-processingParameters@dataset <- sessionKey@dataset
+processingParameters$domain <- sessionKey@domain
+processingParameters$dataset <- sessionKey@dataset
 
 lastYear=as.numeric(swsContext.computationParams$last_year)
 
